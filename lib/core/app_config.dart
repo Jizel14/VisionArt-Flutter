@@ -5,7 +5,7 @@
 ///   Find your IP: `ip addr` or `hostname -I` on Linux.
 /// - **Android emulator:** http://10.0.2.2:3000
 /// - **Web / desktop:** http://localhost:3000
-const String kApiBaseUrl = 'http://10.205.182.5:3000';
+const String kApiBaseUrl = 'http://192.168.100.91:3000';
 
 /// VisionCraft AI image generation (https://visioncraft.top).
 ///
