@@ -6,9 +6,11 @@ import 'core/api_client.dart';
 import 'core/auth_service.dart';
 import 'core/app_config.dart';
 import 'core/signature_storage.dart';
+import 'core/preference_storage.dart';
 import 'presentation/theme/app_theme.dart';
 import 'presentation/screens/splash/splash_screen.dart';
 import 'presentation/screens/auth/auth_screen.dart';
+import 'presentation/screens/preferences/preferences_onboarding_screen.dart';
 import 'screens/home_screen.dart';
 
 const String _keyThemeMode = 'theme_mode';
@@ -148,6 +150,7 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   bool _checked = false;
   bool _loggedIn = false;
+  bool _preferencesComplete = false;
 
   @override
   void initState() {
@@ -157,20 +160,39 @@ class _AuthGateState extends State<AuthGate> {
 
   Future<void> _checkAuth() async {
     final ok = await widget.authService.isLoggedIn;
+    bool prefsOk = false;
+    if (ok) {
+      final prefs = await PreferenceStorage.load();
+      prefsOk = prefs.onboardingComplete;
+    }
     if (mounted) {
       setState(() {
         _checked = true;
         _loggedIn = ok;
+        _preferencesComplete = prefsOk;
       });
     }
   }
 
-  void _goHome() {
-    setState(() => _loggedIn = true);
+  Future<void> _goHome() async {
+    final prefs = await PreferenceStorage.load();
+    if (mounted) {
+      setState(() {
+        _loggedIn = true;
+        _preferencesComplete = prefs.onboardingComplete;
+      });
+    }
+  }
+
+  void _onPreferencesComplete() {
+    setState(() => _preferencesComplete = true);
   }
 
   void _goLogin() {
-    setState(() => _loggedIn = false);
+    setState(() {
+      _loggedIn = false;
+      _preferencesComplete = false;
+    });
   }
 
   @override
@@ -178,6 +200,12 @@ class _AuthGateState extends State<AuthGate> {
     if (!_checked) {
       return const Scaffold(
         body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_loggedIn && !_preferencesComplete) {
+      return PreferencesOnboardingScreen(
+        authService: widget.authService,
+        onComplete: _onPreferencesComplete,
       );
     }
     if (_loggedIn) {

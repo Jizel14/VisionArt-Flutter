@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
-import '../core/api_client.dart';
+import 'api_client.dart';
+import 'user_preferences.dart';
 
 class AuthService {
   AuthService({ApiClient? api, SharedPreferences? prefs})
@@ -59,6 +60,18 @@ class AuthService {
     );
   }
 
+  /// Sign in with Google. Pass the [idToken] from Google Sign-In (authentication.idToken).
+  Future<AuthResult> loginWithGoogle(String idToken) async {
+    final res = await _api.post('/auth/google', {'idToken': idToken});
+    final token = res['access_token'] as String?;
+    if (token == null) throw ApiException(400, 'No token in response');
+    await _saveToken(token);
+    return AuthResult(
+      token: token,
+      user: Map<String, dynamic>.from(res['user'] as Map? ?? {}),
+    );
+  }
+
   Future<Map<String, dynamic>> getProfile() async {
     final token = await getToken;
     if (token == null) throw ApiException(401, 'Not logged in');
@@ -76,7 +89,42 @@ class AuthService {
     return _api.patch('/auth/me', body);
   }
 
+  Future<Map<String, dynamic>> updatePreferences(UserPreferences p) async {
+    final token = await getToken;
+    if (token == null) throw ApiException(401, 'Not logged in');
+    _api.token = token;
+    final body = <String, dynamic>{
+      'subjects': p.subjects,
+      'styles': p.styles,
+      'colors': p.colors,
+      'mood': p.mood,
+      'complexity': p.complexity,
+      'permissions': p.permissions.toJson(),
+      'onboardingComplete': p.onboardingComplete,
+    };
+    return _api.patch('/auth/me/preferences', body);
+  }
+
+  /// Returns the API response; may contain [resetToken] when SMTP is not configured (dev).
+  Future<Map<String, dynamic>> forgotPassword(String email) async {
+    return _api.post('/auth/forgot-password', {'email': email});
+  }
+
+  Future<void> resetPassword(String token, String newPassword) async {
+    await _api.post('/auth/reset-password', {'token': token, 'newPassword': newPassword});
+  }
+
   Future<void> logout() async {
+    await clearToken();
+  }
+
+  /// Permanently deletes the current user account. Caller should clear local
+  /// preferences and navigate to login after success.
+  Future<void> deleteAccount() async {
+    final token = await getToken;
+    if (token == null) throw ApiException(401, 'Not logged in');
+    _api.token = token;
+    await _api.delete('/auth/me');
     await clearToken();
   }
 }
