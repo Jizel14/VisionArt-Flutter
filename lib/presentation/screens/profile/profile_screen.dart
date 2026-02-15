@@ -2,10 +2,12 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../core/auth_service.dart';
+import '../../../core/api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
 import '../splash/widgets/smoke_background.dart';
 import '../signature/signature_editor_screen.dart';
+import '../preferences/preferences_screen.dart';
 import 'edit_profile_screen.dart';
 
 /// Profile screen: avatar, name, email, mock stats, logout. Themed with glassmorphism.
@@ -13,30 +15,66 @@ class ProfileScreen extends StatelessWidget {
   const ProfileScreen({
     super.key,
     required this.authService,
+    this.apiClient,
     required this.userName,
     required this.userEmail,
     this.avatarUrl,
+    this.userBio,
+    this.userPhoneNumber,
+    this.userWebsite,
     required this.onLogout,
     this.onProfileUpdated,
     required this.onToggleTheme,
+    this.onThemeChanged,
     this.isLoading = false,
+    this.artworksCount = 0,
+    this.followersCount = 0,
+    this.followingCount = 0,
+    this.createdAt,
   });
 
   final AuthService authService;
+  final ApiClient? apiClient;
   final String userName;
   final String userEmail;
   final String? avatarUrl;
+  final String? userBio;
+  final String? userPhoneNumber;
+  final String? userWebsite;
   final VoidCallback onLogout;
   final VoidCallback? onProfileUpdated;
   final VoidCallback onToggleTheme;
+  final Function(String)? onThemeChanged;
   final bool isLoading;
+  final int artworksCount;
+  final int followersCount;
+  final int followingCount;
+  final DateTime? createdAt;
 
   // Mock data for profile
-  static const int mockArtworksCount = 12;
-  static const int mockFavoritesCount = 8;
-  static const String mockMemberSince = 'Feb 2025';
-  static const String mockBio =
-      'Creating art from context. Love abstract & landscape.';
+  // static const int mockArtworksCount = 12; // Removed
+  // static const int mockFavoritesCount = 8; // Removed
+  // static const String mockMemberSince = 'Feb 2025'; // Removed
+  // static const String mockBio = 'Creating art from context. Love abstract & landscape.'; // Removed
+
+  String _formatDate(DateTime? date) {
+    if (date == null) return 'Unknown';
+    final months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return '${months[date.month - 1]} ${date.year}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,10 +101,7 @@ class ProfileScreen extends StatelessWidget {
             child: Container(
               width: 100,
               height: 100,
-              decoration: BoxDecoration(
-                color: border,
-                shape: BoxShape.circle,
-              ),
+              decoration: BoxDecoration(color: border, shape: BoxShape.circle),
             ),
           ),
           const SizedBox(height: 16),
@@ -157,50 +192,51 @@ class ProfileScreen extends StatelessWidget {
           Text(
             userName,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: textPrimary,
-                  fontWeight: FontWeight.w700,
-                ),
+              color: textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
             userEmail,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: textSecondary,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(color: textSecondary),
           ),
           const SizedBox(height: 24),
-          // Bio card (mock)
-          _GlassCard(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.auto_awesome,
-                    color: AppColors.accentPink,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      mockBio,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: textSecondary,
-                            height: 1.4,
-                          ),
+          // Bio card
+          if (userBio != null && userBio!.isNotEmpty)
+            _GlassCard(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.auto_awesome,
+                      color: AppColors.accentPink,
+                      size: 20,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        userBio!,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: textSecondary,
+                          height: 1.4,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
           const SizedBox(height: 20),
-          // Stats row (mock)
+          // Stats row
           Row(
             children: [
               Expanded(
                 child: _StatCard(
-                  value: '$mockArtworksCount',
+                  value: '$artworksCount',
                   label: 'Artworks',
                   icon: Icons.brush_rounded,
                 ),
@@ -208,9 +244,17 @@ class ProfileScreen extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: _StatCard(
-                  value: '$mockFavoritesCount',
-                  label: 'Favorites',
-                  icon: Icons.favorite_rounded,
+                  value: '$followersCount',
+                  label: 'Followers',
+                  icon: Icons.people_rounded,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _StatCard(
+                  value: '$followingCount',
+                  label: 'Following',
+                  icon: Icons.person_add_rounded,
                 ),
               ),
             ],
@@ -218,10 +262,13 @@ class ProfileScreen extends StatelessWidget {
           const SizedBox(height: 12),
           _GlassCard(
             child: ListTile(
-              leading: Icon(Icons.calendar_today_rounded,
-                  color: AppColors.lightBlue, size: 22),
+              leading: Icon(
+                Icons.calendar_today_rounded,
+                color: AppColors.lightBlue,
+                size: 22,
+              ),
               title: Text(
-                'Member since $mockMemberSince',
+                'Member since ${_formatDate(createdAt)}',
                 style: TextStyle(
                   color: textPrimary,
                   fontSize: 14,
@@ -250,6 +297,10 @@ class ProfileScreen extends StatelessWidget {
                       authService: authService,
                       initialName: userName,
                       initialEmail: userEmail,
+                      initialBio: userBio,
+                      initialAvatarUrl: avatarUrl,
+                      initialPhoneNumber: userPhoneNumber,
+                      initialWebsite: userWebsite,
                       onSaved: onProfileUpdated ?? () {},
                     ),
                   ),
@@ -308,14 +359,26 @@ class ProfileScreen extends StatelessWidget {
             child: ListTile(
               leading: Icon(Icons.settings_rounded, color: textSecondary),
               title: Text(
-                'Settings',
+                'Preferences',
                 style: TextStyle(
                   color: textPrimary,
                   fontWeight: FontWeight.w500,
                 ),
               ),
               trailing: Icon(Icons.chevron_right, color: textSecondary),
-              onTap: () {},
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) => PreferencesScreen(
+                      apiClient: apiClient,
+                      onPreferencesUpdated: () {
+                        onProfileUpdated?.call();
+                      },
+                      onThemeChanged: onThemeChanged,
+                    ),
+                  ),
+                );
+              },
             ),
           ),
           const SizedBox(height: 32),
@@ -360,13 +423,13 @@ class _GlassCard extends StatelessWidget {
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
               color: context.isDark
-                  ? AppColors.primaryBlue.withOpacity(0.25)
-                  : context.borderColor.withOpacity(0.6),
+                  ? AppColors.primaryBlue.withValues(alpha: 0.25)
+                  : context.borderColor.withValues(alpha: 0.6),
               width: 1,
             ),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primaryPurple.withOpacity(0.12),
+                color: AppColors.primaryPurple.withValues(alpha: 0.12),
                 blurRadius: 16,
                 offset: const Offset(0, 4),
               ),
@@ -404,17 +467,17 @@ class _StatCard extends StatelessWidget {
             Text(
               value,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    color: textPrimary,
-                    fontWeight: FontWeight.w700,
-                  ),
+                color: textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 2),
             Text(
               label,
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: textSecondary,
-                    fontSize: 12,
-                  ),
+                color: textSecondary,
+                fontSize: 12,
+              ),
             ),
           ],
         ),
