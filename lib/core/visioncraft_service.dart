@@ -6,19 +6,14 @@ import 'app_config.dart';
 
 /// Wrapper around [VisionCraft] for AI image generation in VisionArt.
 ///
-/// Uses API key from [app_config] (set via --dart-define=VISIONCRAFT_API_KEY).
+/// Uses API key from [AppConfig] (set via .env file or --dart-define=VISIONCRAFT_API_KEY).
 /// Get your key from the VisionCraft Telegram bot: https://t.me/Metimol
 class VisionCraftService {
-  VisionCraftService({
-    String? apiKey,
-    String? baseUrl,
-  })  : _apiKey = apiKey ?? kVisionCraftApiKey,
-        _baseUrl = baseUrl ?? kVisionCraftBaseUrl {
+  VisionCraftService({String? apiKey, String? baseUrl})
+    : _apiKey = apiKey ?? AppConfig.visionCraftApiKey,
+      _baseUrl = baseUrl ?? AppConfig.visionCraftBaseUrl {
     if (_apiKey.isNotEmpty) {
-      _client = VisionCraft(
-        apiKey: _apiKey,
-        baseUrl: _baseUrl,
-      );
+      _client = VisionCraft(apiKey: _apiKey, baseUrl: _baseUrl);
     }
   }
 

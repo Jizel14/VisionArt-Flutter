@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import '../core/auth_service.dart';
+import '../core/api_client.dart';
+import '../core/app_config.dart';
+import '../core/models/user_model.dart';
 import '../presentation/theme/app_colors.dart';
 import '../presentation/theme/theme_extensions.dart';
 import '../presentation/screens/home/home_tab.dart';
@@ -38,12 +41,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _loadProfile() async {
     try {
+      // Token is already set in main.dart via ApiClient.setToken()
+
       final user = await widget.authService.getProfile();
       if (mounted) {
         setState(() {
           _user = user;
           _loading = false;
         });
+      }
+    } on SessionExpiredException {
+      // Session expired, automatically logout and navigate to login
+      if (mounted) {
+        await widget.authService.logout();
+        widget.onLogout();
       }
     } catch (e) {
       if (mounted) {
@@ -60,10 +71,32 @@ class _HomeScreenState extends State<HomeScreen> {
     if (mounted) widget.onLogout();
   }
 
+  /// Handle theme changes from preferences
+  void _handleThemeChanged(String theme) {
+    // The theme preference has been saved to the backend and SharedPreferences by PreferencesUI
+    // For immediate theme change, you could implement app-level state management (Provider, Riverpod, etc.)
+    // For now, the theme will be applied on the next app restart
+    // or you can show a message to the user
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Theme preference saved. Will apply on next app restart.',
+          ),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final userName = _user?['name'] as String? ?? 'User';
     final userEmail = _user?['email'] as String? ?? '';
+    final userBio = _user?['bio'] as String?;
+    final userAvatarUrl = _user?['avatarUrl'] as String?;
+    final userPhoneNumber = _user?['phoneNumber'] as String?;
+    final userWebsite = _user?['website'] as String?;
 
     if (_error != null) {
       return Scaffold(
@@ -105,17 +138,52 @@ class _HomeScreenState extends State<HomeScreen> {
             userName: userName,
             isLoading: _loading,
             onToggleTheme: widget.onToggleTheme,
+            currentUser: _user != null
+                ? UserModel(
+                    id: _user!['id'] ?? '',
+                    email: _user!['email'] ?? '',
+                    name: _user!['name'] ?? '',
+                    bio: _user!['bio'],
+                    avatarUrl: _user!['avatarUrl'],
+                    followersCount: _user!['followersCount'] ?? 0,
+                    followingCount: _user!['followingCount'] ?? 0,
+                    publicGenerationsCount:
+                        _user!['publicGenerationsCount'] ?? 0,
+                    isVerified: _user!['isVerified'] ?? false,
+                    isPrivateAccount: _user!['isPrivateAccount'] ?? false,
+                    createdAt: _user!['createdAt'] != null
+                        ? DateTime.parse(_user!['createdAt'] as String)
+                        : DateTime.now(),
+                    updatedAt: _user!['updatedAt'] != null
+                        ? DateTime.parse(_user!['updatedAt'] as String)
+                        : DateTime.now(),
+                  )
+                : null,
           ),
           const CreateArtScreen(),
           const MarketplaceScreen(),
           ProfileScreen(
             authService: widget.authService,
+            apiClient: null,
             userName: userName,
             userEmail: userEmail,
+            avatarUrl: userAvatarUrl,
+            userBio: userBio,
+            userPhoneNumber: userPhoneNumber,
+            userWebsite: userWebsite,
+            artworksCount: _user != null
+                ? (_user!['publicGenerationsCount'] ?? 0)
+                : 0,
+            followersCount: _user != null ? (_user!['followersCount'] ?? 0) : 0,
+            followingCount: _user != null ? (_user!['followingCount'] ?? 0) : 0,
+            createdAt: _user != null && _user!['createdAt'] != null
+                ? DateTime.tryParse(_user!['createdAt'].toString())
+                : null,
             isLoading: _loading,
             onLogout: _logout,
             onProfileUpdated: _loadProfile,
             onToggleTheme: widget.onToggleTheme,
+            onThemeChanged: _handleThemeChanged,
           ),
         ],
       ),
