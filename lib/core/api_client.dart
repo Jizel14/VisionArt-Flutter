@@ -1,53 +1,66 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:dio/dio.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ApiClient {
-  ApiClient({this.baseUrl = 'http://localhost:3000', String? token}) : _token = token;
+  static late Dio _dio;
+  static String? _token;
 
-  final String baseUrl;
-  String? _token;
+  // Initialize the API client
+  static Future<void> init() async {
+    await dotenv.load();
 
-  set token(String? value) => _token = value;
+    final baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://192.168.1.15:3000';
 
-  Map<String, String> get _headers {
-    final headers = {'Content-Type': 'application/json'};
-    if (_token != null) headers['Authorization'] = 'Bearer $_token';
-    return headers;
-  }
-
-  Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {
-    final r = await http.post(
-      Uri.parse('$baseUrl$path'),
-      headers: _headers,
-      body: jsonEncode(body),
+    _dio = Dio(
+      BaseOptions(
+        baseUrl: baseUrl,
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 30),
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ),
     );
-    return _handleResponse(r);
-  }
 
-  Future<Map<String, dynamic>> get(String path) async {
-    final r = await http.get(Uri.parse('$baseUrl$path'), headers: _headers);
-    return _handleResponse(r);
-  }
-
-  Future<Map<String, dynamic>> patch(String path, Map<String, dynamic> body) async {
-    final r = await http.patch(
-      Uri.parse('$baseUrl$path'),
-      headers: _headers,
-      body: jsonEncode(body),
+    // Add interceptors
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          if (_token != null) {
+            options.headers['Authorization'] = 'Bearer $_token';
+          }
+          return handler.next(options);
+        },
+        onError: (error, handler) {
+          if (error.response?.statusCode == 401) {
+            // Handle token refresh or logout here
+            print('Unauthorized - Token may have expired');
+          }
+          return handler.next(error);
+        },
+      ),
     );
-    return _handleResponse(r);
   }
 
-  static Future<Map<String, dynamic>> _handleResponse(http.Response r) async {
-    final decoded = r.body.isNotEmpty ? jsonDecode(r.body) : <String, dynamic>{};
-    if (r.statusCode >= 200 && r.statusCode < 300) {
-      return decoded is Map<String, dynamic> ? decoded : {'data': decoded};
-    }
-    final message = decoded is Map && decoded['message'] != null
-        ? decoded['message'].toString()
-        : 'Request failed';
-    throw ApiException(r.statusCode, message);
+  // Get singleton instance
+  static Dio get instance => _dio;
+
+  // Set authentication token
+  static void setToken(String token) {
+    _token = token;
   }
+
+  // Clear authentication token
+  static void clearToken() {
+    _token = null;
+  }
+
+  // Get current token
+  static String? get token => _token;
+
+  // Check if user is authenticated
+  static bool get isAuthenticated => _token != null && _token!.isNotEmpty;
 }
 
 class ApiException implements Exception {
@@ -56,4 +69,9 @@ class ApiException implements Exception {
   final String message;
   @override
   String toString() => message;
+}
+
+class SessionExpiredException extends ApiException {
+  SessionExpiredException(int statusCode, String message)
+    : super(statusCode, message);
 }
