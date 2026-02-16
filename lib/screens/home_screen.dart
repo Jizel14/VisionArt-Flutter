@@ -105,9 +105,10 @@ class _HomeScreenState extends State<HomeScreen> {
             userName: userName,
             isLoading: _loading,
             onToggleTheme: widget.onToggleTheme,
+            authService: widget.authService,
           ),
           const CreateArtScreen(),
-          const MarketplaceScreen(),
+          MarketplaceScreen(authService: widget.authService),
           ProfileScreen(
             authService: widget.authService,
             userName: userName,

@@ -127,6 +127,27 @@ class AuthService {
     await _api.delete('/auth/me');
     await clearToken();
   }
+
+  /// Submit a report (artwork, bug, user, other).
+  Future<Map<String, dynamic>> submitReport({
+    required String type,
+    required String subject,
+    required String description,
+    String? targetId,
+    String? imageUrl,
+  }) async {
+    final token = await getToken;
+    if (token == null) throw ApiException(401, 'Not logged in');
+    _api.token = token;
+    final body = <String, dynamic>{
+      'type': type,
+      'subject': subject,
+      'description': description,
+    };
+    if (targetId != null) body['targetId'] = targetId;
+    if (imageUrl != null) body['imageUrl'] = imageUrl;
+    return _api.post('/reports', body);
+  }
 }
 
 class AuthResult {

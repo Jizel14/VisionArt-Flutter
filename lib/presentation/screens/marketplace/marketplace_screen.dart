@@ -4,14 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../core/mock_image_urls.dart';
+import '../../../core/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
 import '../splash/widgets/smoke_background.dart';
+import '../report/report_screen.dart';
 import 'art_detail_screen.dart';
 
 /// Marketplace: buy/sell AI art with Web3 / NFT feel. Price + Buy or Negotiate.
 class MarketplaceScreen extends StatelessWidget {
-  const MarketplaceScreen({super.key});
+  const MarketplaceScreen({super.key, required this.authService});
+
+  final AuthService authService;
 
   static final List<Map<String, dynamic>> _mockListings = [
     {
@@ -164,6 +168,18 @@ class MarketplaceScreen extends StatelessWidget {
                       negotiable: item['negotiable'] as bool,
                       textPrimary: textPrimary,
                       textSecondary: textSecondary,
+                      onReport: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ReportScreen(
+                              authService: authService,
+                              initialType: 'artwork',
+                              targetId: item['id'] as String,
+                              targetLabel: item['title'] as String,
+                            ),
+                          ),
+                        );
+                      },
                       onTap: () {
                         Navigator.of(context).push(
                           ArtDetailScreen.route(
@@ -244,6 +260,7 @@ class _ListingCard extends StatelessWidget {
     required this.textPrimary,
     required this.textSecondary,
     this.onTap,
+    this.onReport,
   });
 
   final String title;
@@ -257,6 +274,7 @@ class _ListingCard extends StatelessWidget {
   final Color textPrimary;
   final Color textSecondary;
   final VoidCallback? onTap;
+  final VoidCallback? onReport;
 
   @override
   Widget build(BuildContext context) {
@@ -356,6 +374,30 @@ class _ListingCard extends StatelessWidget {
                                   ),
                             ),
                           ],
+                        ),
+                      ),
+                    ),
+                    // Report "!" button
+                    Positioned(
+                      bottom: 8,
+                      right: 8,
+                      child: GestureDetector(
+                        onTap: onReport,
+                        child: Container(
+                          width: 30,
+                          height: 30,
+                          decoration: BoxDecoration(
+                            color: Colors.black45,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.white24),
+                          ),
+                          child: const Center(
+                            child: Icon(
+                              Icons.report_rounded,
+                              size: 16,
+                              color: Colors.white70,
+                            ),
+                          ),
                         ),
                       ),
                     ),

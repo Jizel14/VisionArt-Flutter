@@ -4,9 +4,11 @@ import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
 import '../../../core/mock_image_urls.dart';
+import '../../../core/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
 import '../splash/widgets/smoke_background.dart';
+import '../report/report_screen.dart';
 import 'post_detail_screen.dart';
 
 /// Home tab: feed of mock posts — AI images, quotes, likes, comments, share.
@@ -16,11 +18,13 @@ class HomeTab extends StatelessWidget {
     required this.userName,
     this.isLoading = false,
     required this.onToggleTheme,
+    required this.authService,
   });
 
   final String userName;
   final bool isLoading;
   final VoidCallback onToggleTheme;
+  final AuthService authService;
 
   static final List<Map<String, dynamic>> mockPosts = [
     {
@@ -172,6 +176,18 @@ class HomeTab extends StatelessWidget {
                                       time: post['time'] as String,
                                       textPrimary: textPrimary,
                                       textSecondary: textSecondary,
+                                      onReport: () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) => ReportScreen(
+                                              authService: authService,
+                                              initialType: 'artwork',
+                                              targetId: 'post-$index',
+                                              targetLabel: post['quote'] as String,
+                                            ),
+                                          ),
+                                        );
+                                      },
                                       onTap: () {
                                         Navigator.of(context).push(
                                           PostDetailScreen.route(
@@ -284,6 +300,7 @@ class _FeedCard extends StatelessWidget {
     required this.textPrimary,
     required this.textSecondary,
     this.onTap,
+    this.onReport,
   });
 
   final String author;
@@ -297,6 +314,7 @@ class _FeedCard extends StatelessWidget {
   final Color textPrimary;
   final Color textSecondary;
   final VoidCallback? onTap;
+  final VoidCallback? onReport;
 
   @override
   Widget build(BuildContext context) {
@@ -423,6 +441,13 @@ class _FeedCard extends StatelessWidget {
                     label: '$comments',
                     color: AppColors.primaryBlue,
                     onTap: () {},
+                  ),
+                  const SizedBox(width: 16),
+                  _ActionChip(
+                    icon: Icons.report_rounded,
+                    label: '!',
+                    color: AppColors.error.withOpacity(0.7),
+                    onTap: onReport ?? () {},
                   ),
                   const Spacer(),
                   _ActionChip(
