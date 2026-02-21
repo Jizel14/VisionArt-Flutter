@@ -18,14 +18,12 @@ const String _keyThemeMode = 'theme_mode';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize configuration from .env file (or dart-define as fallback)
   await AppConfig.init();
-
-  // Initialize API client
   await ApiClient.init();
 
   final authService = AuthService();
   final token = await authService.getToken;
+
   if (token != null && token.isNotEmpty) {
     ApiClient.setToken(token);
   }
@@ -41,7 +39,6 @@ class VisionArtApp extends StatefulWidget {
   @override
   State<VisionArtApp> createState() => _VisionArtAppState();
 
-  /// Global method to change theme from anywhere in the app
   static _VisionArtAppState? of(BuildContext context) {
     return context.findRootAncestorStateOfType<_VisionArtAppState>();
   }
@@ -59,7 +56,8 @@ class _VisionArtAppState extends State<VisionArtApp> {
   Future<void> _loadThemeMode() async {
     final prefs = await SharedPreferences.getInstance();
     final value = prefs.getString(_keyThemeMode);
-    ThemeMode newMode = ThemeMode.dark; // default
+
+    ThemeMode newMode = ThemeMode.dark;
 
     if (value == 'light') {
       newMode = ThemeMode.light;
@@ -76,10 +74,10 @@ class _VisionArtAppState extends State<VisionArtApp> {
 
   Future<void> _toggleTheme() async {
     setState(() {
-      _themeMode = _themeMode == ThemeMode.dark
-          ? ThemeMode.light
-          : ThemeMode.dark;
+      _themeMode =
+          _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
     });
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       _keyThemeMode,
@@ -87,9 +85,9 @@ class _VisionArtAppState extends State<VisionArtApp> {
     );
   }
 
-  /// Change theme from preferences screen
   Future<void> changeTheme(String themeString) async {
     ThemeMode newMode;
+
     switch (themeString) {
       case 'light':
         newMode = ThemeMode.light;
@@ -126,18 +124,19 @@ class _VisionArtAppState extends State<VisionArtApp> {
       ),
       routes: {
         '/preferences': (context) => PreferencesScreen(
-          apiClient: null,
-          onPreferencesUpdated: () {
-            // Callback when preferences are updated
-          },
-        ),
+              apiClient: null,
+              onPreferencesUpdated: () {},
+            ),
       },
     );
   }
 }
 
 class _AppLoader extends StatefulWidget {
-  const _AppLoader({required this.authService, required this.onToggleTheme});
+  const _AppLoader({
+    required this.authService,
+    required this.onToggleTheme,
+  });
 
   final AuthService authService;
   final VoidCallback onToggleTheme;
@@ -159,11 +158,13 @@ class _AppLoaderState extends State<_AppLoader> {
 
   Future<void> _init() async {
     final bytes = await SignatureStorage.load();
-    if (mounted)
+
+    if (mounted) {
       setState(() {
         _signatureBytes = bytes;
         _initialized = true;
       });
+    }
   }
 
   void _onSplashComplete() {
@@ -173,14 +174,18 @@ class _AppLoaderState extends State<_AppLoader> {
   @override
   Widget build(BuildContext context) {
     if (!_initialized) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
+
     if (_showSplash) {
       return SplashScreen(
         onComplete: _onSplashComplete,
         signatureBytes: _signatureBytes,
       );
     }
+
     return AuthGate(
       authService: widget.authService,
       onToggleTheme: widget.onToggleTheme,
@@ -214,6 +219,7 @@ class _AuthGateState extends State<AuthGate> {
 
   Future<void> _checkAuth() async {
     final ok = await widget.authService.isLoggedIn;
+
     if (mounted) {
       setState(() {
         _checked = true;
@@ -233,8 +239,11 @@ class _AuthGateState extends State<AuthGate> {
   @override
   Widget build(BuildContext context) {
     if (!_checked) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
     }
+
     if (_loggedIn) {
       return HomeScreen(
         authService: widget.authService,
@@ -242,6 +251,7 @@ class _AuthGateState extends State<AuthGate> {
         onToggleTheme: widget.onToggleTheme,
       );
     }
+
     return AuthScreen(
       authService: widget.authService,
       onSuccess: _goHome,
