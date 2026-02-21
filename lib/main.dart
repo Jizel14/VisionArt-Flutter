@@ -6,21 +6,27 @@ import 'core/api_client.dart';
 import 'core/auth_service.dart';
 import 'core/app_config.dart';
 import 'core/signature_storage.dart';
-import 'core/preference_storage.dart';
+import 'core/preferences_service.dart';
 import 'presentation/theme/app_theme.dart';
 import 'presentation/screens/splash/splash_screen.dart';
 import 'presentation/screens/auth/auth_screen.dart';
-import 'presentation/screens/preferences/preferences_onboarding_screen.dart';
+import 'presentation/screens/preferences/preferences_screen.dart';
 import 'screens/home_screen.dart';
 
 const String _keyThemeMode = 'theme_mode';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final api = ApiClient(baseUrl: kApiBaseUrl);
-  final authService = AuthService(api: api);
+
+  await AppConfig.init();
+  await ApiClient.init();
+
+  final authService = AuthService();
   final token = await authService.getToken;
-  if (token != null && token.isNotEmpty) api.token = token;
+
+  if (token != null && token.isNotEmpty) {
+    ApiClient.setToken(token);
+  }
 
   runApp(VisionArtApp(authService: authService));
 }
@@ -32,6 +38,10 @@ class VisionArtApp extends StatefulWidget {
 
   @override
   State<VisionArtApp> createState() => _VisionArtAppState();
+
+  static _VisionArtAppState? of(BuildContext context) {
+    return context.findRootAncestorStateOfType<_VisionArtAppState>();
+  }
 }
 
 class _VisionArtAppState extends State<VisionArtApp> {
@@ -46,19 +56,58 @@ class _VisionArtAppState extends State<VisionArtApp> {
   Future<void> _loadThemeMode() async {
     final prefs = await SharedPreferences.getInstance();
     final value = prefs.getString(_keyThemeMode);
-    if (value == 'light' && mounted) {
-      setState(() => _themeMode = ThemeMode.light);
-    } else if (value == 'dark' && mounted) {
-      setState(() => _themeMode = ThemeMode.dark);
+
+    ThemeMode newMode = ThemeMode.dark;
+
+    if (value == 'light') {
+      newMode = ThemeMode.light;
+    } else if (value == 'dark') {
+      newMode = ThemeMode.dark;
+    } else if (value == 'auto') {
+      newMode = ThemeMode.system;
+    }
+
+    if (mounted) {
+      setState(() => _themeMode = newMode);
     }
   }
 
   Future<void> _toggleTheme() async {
     setState(() {
-      _themeMode = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+      _themeMode =
+          _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
     });
+
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyThemeMode, _themeMode == ThemeMode.dark ? 'dark' : 'light');
+    await prefs.setString(
+      _keyThemeMode,
+      _themeMode == ThemeMode.dark ? 'dark' : 'light',
+    );
+  }
+
+  Future<void> changeTheme(String themeString) async {
+    ThemeMode newMode;
+
+    switch (themeString) {
+      case 'light':
+        newMode = ThemeMode.light;
+        break;
+      case 'dark':
+        newMode = ThemeMode.dark;
+        break;
+      case 'auto':
+        newMode = ThemeMode.system;
+        break;
+      default:
+        newMode = ThemeMode.system;
+    }
+
+    setState(() {
+      _themeMode = newMode;
+    });
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_keyThemeMode, themeString);
   }
 
   @override
@@ -73,6 +122,12 @@ class _VisionArtAppState extends State<VisionArtApp> {
         authService: widget.authService,
         onToggleTheme: _toggleTheme,
       ),
+      routes: {
+        '/preferences': (context) => PreferencesScreen(
+              apiClient: null,
+              onPreferencesUpdated: () {},
+            ),
+      },
     );
   }
 }
@@ -103,10 +158,13 @@ class _AppLoaderState extends State<_AppLoader> {
 
   Future<void> _init() async {
     final bytes = await SignatureStorage.load();
-    if (mounted) setState(() {
-      _signatureBytes = bytes;
-      _initialized = true;
-    });
+
+    if (mounted) {
+      setState(() {
+        _signatureBytes = bytes;
+        _initialized = true;
+      });
+    }
   }
 
   void _onSplashComplete() {
@@ -120,12 +178,14 @@ class _AppLoaderState extends State<_AppLoader> {
         body: Center(child: CircularProgressIndicator()),
       );
     }
+
     if (_showSplash) {
       return SplashScreen(
         onComplete: _onSplashComplete,
         signatureBytes: _signatureBytes,
       );
     }
+
     return AuthGate(
       authService: widget.authService,
       onToggleTheme: widget.onToggleTheme,
@@ -150,7 +210,6 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   bool _checked = false;
   bool _loggedIn = false;
-  bool _preferencesComplete = false;
 
   @override
   void initState() {
@@ -160,39 +219,21 @@ class _AuthGateState extends State<AuthGate> {
 
   Future<void> _checkAuth() async {
     final ok = await widget.authService.isLoggedIn;
-    bool prefsOk = false;
-    if (ok) {
-      final prefs = await PreferenceStorage.load();
-      prefsOk = prefs.onboardingComplete;
-    }
+
     if (mounted) {
       setState(() {
         _checked = true;
         _loggedIn = ok;
-        _preferencesComplete = prefsOk;
       });
     }
   }
 
-  Future<void> _goHome() async {
-    final prefs = await PreferenceStorage.load();
-    if (mounted) {
-      setState(() {
-        _loggedIn = true;
-        _preferencesComplete = prefs.onboardingComplete;
-      });
-    }
-  }
-
-  void _onPreferencesComplete() {
-    setState(() => _preferencesComplete = true);
+  void _goHome() {
+    setState(() => _loggedIn = true);
   }
 
   void _goLogin() {
-    setState(() {
-      _loggedIn = false;
-      _preferencesComplete = false;
-    });
+    setState(() => _loggedIn = false);
   }
 
   @override
@@ -202,12 +243,7 @@ class _AuthGateState extends State<AuthGate> {
         body: Center(child: CircularProgressIndicator()),
       );
     }
-    if (_loggedIn && !_preferencesComplete) {
-      return PreferencesOnboardingScreen(
-        authService: widget.authService,
-        onComplete: _onPreferencesComplete,
-      );
-    }
+
     if (_loggedIn) {
       return HomeScreen(
         authService: widget.authService,
@@ -215,6 +251,7 @@ class _AuthGateState extends State<AuthGate> {
         onToggleTheme: widget.onToggleTheme,
       );
     }
+
     return AuthScreen(
       authService: widget.authService,
       onSuccess: _goHome,

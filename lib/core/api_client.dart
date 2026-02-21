@@ -1,64 +1,87 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:dio/dio.dart';
+import 'app_config.dart';
 
 class ApiClient {
-  ApiClient({this.baseUrl = 'http://localhost:3000', String? token}) : _token = token;
+  static late final Dio _dio;
+  static String? _token;
 
-  final String baseUrl;
-  String? _token;
+  /// Initialize API client
+  static Future<void> init() async {
+    final baseUrl = AppConfig.apiBaseUrl;
 
-  set token(String? value) => _token = value;
-
-  Map<String, String> get _headers {
-    final headers = {'Content-Type': 'application/json'};
-    if (_token != null) headers['Authorization'] = 'Bearer $_token';
-    return headers;
-  }
-
-  Future<Map<String, dynamic>> post(String path, Map<String, dynamic> body) async {
-    final r = await http.post(
-      Uri.parse('$baseUrl$path'),
-      headers: _headers,
-      body: jsonEncode(body),
+    _dio = Dio(
+      BaseOptions(
+        baseUrl: baseUrl,
+        connectTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 30),
+        headers: const {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ),
     );
-    return _handleResponse(r);
-  }
 
-  Future<Map<String, dynamic>> get(String path) async {
-    final r = await http.get(Uri.parse('$baseUrl$path'), headers: _headers);
-    return _handleResponse(r);
-  }
-
-  Future<Map<String, dynamic>> patch(String path, Map<String, dynamic> body) async {
-    final r = await http.patch(
-      Uri.parse('$baseUrl$path'),
-      headers: _headers,
-      body: jsonEncode(body),
+    _dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          if (_token != null && _token!.isNotEmpty) {
+            options.headers['Authorization'] = 'Bearer $_token';
+          }
+          handler.next(options);
+        },
+        onError: (error, handler) {
+          if (error.response?.statusCode == 401) {
+            handler.reject(
+              DioException(
+                requestOptions: error.requestOptions,
+                response: error.response,
+                error: SessionExpiredException(
+                  401,
+                  'Session expired. Please login again.',
+                ),
+                type: DioExceptionType.badResponse,
+              ),
+            );
+            return;
+          }
+          handler.next(error);
+        },
+      ),
     );
-    return _handleResponse(r);
   }
 
-  Future<Map<String, dynamic>> delete(String path) async {
-    final r = await http.delete(Uri.parse('$baseUrl$path'), headers: _headers);
-    return _handleResponse(r);
+  /// Dio instance
+  static Dio get instance => _dio;
+
+  /// Set auth token
+  static void setToken(String token) {
+    _token = token;
   }
 
-  static Future<Map<String, dynamic>> _handleResponse(http.Response r) async {
-    final decoded = r.body.isNotEmpty ? jsonDecode(r.body) : <String, dynamic>{};
-    if (r.statusCode >= 200 && r.statusCode < 300) {
-      return decoded is Map<String, dynamic> ? decoded : {'data': decoded};
-    }
-    final message = decoded is Map && decoded['message'] != null
-        ? decoded['message'].toString()
-        : 'Request failed';
-    throw ApiException(r.statusCode, message);
+  /// Clear auth token
+  static void clearToken() {
+    _token = null;
   }
+
+  /// Get current token
+  static String? get token => _token;
+
+  /// Is authenticated
+  static bool get isAuthenticated =>
+      _token != null && _token!.isNotEmpty;
 }
 
 class ApiException implements Exception {
   ApiException(this.statusCode, this.message);
+
   final int statusCode;
   final String message;
+
   @override
   String toString() => message;
+}
+
+class SessionExpiredException extends ApiException {
+  SessionExpiredException(int statusCode, String message)
+      : super(statusCode, message);
 }
