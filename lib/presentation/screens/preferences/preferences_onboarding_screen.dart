@@ -19,14 +19,17 @@ class PreferencesOnboardingScreen extends StatefulWidget {
 
   final AuthService authService;
   final VoidCallback onComplete;
+
   /// When set (e.g. from profile), pre-fill and allow editing.
   final UserPreferences? initialPreferences;
 
   @override
-  State<PreferencesOnboardingScreen> createState() => _PreferencesOnboardingScreenState();
+  State<PreferencesOnboardingScreen> createState() =>
+      _PreferencesOnboardingScreenState();
 }
 
-class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScreen> {
+class _PreferencesOnboardingScreenState
+    extends State<PreferencesOnboardingScreen> {
   static const int _totalSteps = 7;
   late int _step;
   late List<String> _subjects;
@@ -51,25 +54,69 @@ class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScree
   }
 
   static const List<Map<String, String>> _subjectOptions = [
-    {'emoji': '🌿', 'label': 'Nature & Paysages', 'sub': 'Montagnes, forêts, mer'},
-    {'emoji': '👤', 'label': 'Portraits & Personnages', 'sub': 'Visages, expressions'},
-    {'emoji': '🏛️', 'label': 'Architecture', 'sub': 'Bâtiments, villes, monuments'},
-    {'emoji': '🦊', 'label': 'Animaux', 'sub': 'Faune, animaux domestiques/sauvages'},
-    {'emoji': '🧚', 'label': 'Fantastique', 'sub': 'Créatures, mondes imaginaires'},
-    {'emoji': '🤖', 'label': 'Science-fiction', 'sub': 'Futur, technologie, robots'},
+    {
+      'emoji': '🌿',
+      'label': 'Nature & Paysages',
+      'sub': 'Montagnes, forêts, mer',
+    },
+    {
+      'emoji': '👤',
+      'label': 'Portraits & Personnages',
+      'sub': 'Visages, expressions',
+    },
+    {
+      'emoji': '🏛️',
+      'label': 'Architecture',
+      'sub': 'Bâtiments, villes, monuments',
+    },
+    {
+      'emoji': '🦊',
+      'label': 'Animaux',
+      'sub': 'Faune, animaux domestiques/sauvages',
+    },
+    {
+      'emoji': '🧚',
+      'label': 'Fantastique',
+      'sub': 'Créatures, mondes imaginaires',
+    },
+    {
+      'emoji': '🤖',
+      'label': 'Science-fiction',
+      'sub': 'Futur, technologie, robots',
+    },
     {'emoji': '💭', 'label': 'Abstrait', 'sub': 'Formes, textures, concepts'},
-    {'emoji': '🍎', 'label': 'Nature morte', 'sub': 'Objets, fleurs, compositions'},
+    {
+      'emoji': '🍎',
+      'label': 'Nature morte',
+      'sub': 'Objets, fleurs, compositions',
+    },
   ];
 
   static const List<Map<String, String>> _styleOptions = [
-    {'emoji': '🎨', 'label': 'Impressionnisme', 'sub': 'Jeux de lumière, Monet'},
+    {
+      'emoji': '🎨',
+      'label': 'Impressionnisme',
+      'sub': 'Jeux de lumière, Monet',
+    },
     {'emoji': '🌌', 'label': 'Surréalisme', 'sub': 'Rêves, Dali, Magritte'},
-    {'emoji': '🌃', 'label': 'Cyberpunk', 'sub': 'Néon, futuriste, Blade Runner'},
+    {
+      'emoji': '🌃',
+      'label': 'Cyberpunk',
+      'sub': 'Néon, futuriste, Blade Runner',
+    },
     {'emoji': '◻️', 'label': 'Minimalisme', 'sub': 'Épuré, formes simples'},
     {'emoji': '💧', 'label': 'Aquarelle', 'sub': 'Doux, transparent, fluide'},
-    {'emoji': '🖼️', 'label': 'Peinture à l\'huile', 'sub': 'Riche texture, classique'},
+    {
+      'emoji': '🖼️',
+      'label': 'Peinture à l\'huile',
+      'sub': 'Riche texture, classique',
+    },
     {'emoji': '💻', 'label': 'Art digital', 'sub': 'Moderne, net, graphique'},
-    {'emoji': '🇯🇵', 'label': 'Anime/Manga', 'sub': 'Style japonais, expressif'},
+    {
+      'emoji': '🇯🇵',
+      'label': 'Anime/Manga',
+      'sub': 'Style japonais, expressif',
+    },
   ];
 
   static const List<Map<String, String>> _colorOptions = [
@@ -91,9 +138,21 @@ class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScree
   ];
 
   static const List<Map<String, String>> _permissionOptions = [
-    {'emoji': '📍', 'label': 'Localisation', 'sub': 'Adapter l\'art à ton lieu'},
-    {'emoji': '🌤️', 'label': 'Météo', 'sub': 'Créer selon le temps qu\'il fait'},
-    {'emoji': '🎵', 'label': 'Musique', 'sub': 'S\'inspirer de ce que tu écoutes'},
+    {
+      'emoji': '📍',
+      'label': 'Localisation',
+      'sub': 'Adapter l\'art à ton lieu',
+    },
+    {
+      'emoji': '🌤️',
+      'label': 'Météo',
+      'sub': 'Créer selon le temps qu\'il fait',
+    },
+    {
+      'emoji': '🎵',
+      'label': 'Musique',
+      'sub': 'S\'inspirer de ce que tu écoutes',
+    },
     {'emoji': '📅', 'label': 'Calendrier', 'sub': 'Créer pour tes événements'},
     {'emoji': '⏰', 'label': 'Heure du jour', 'sub': 'Adapter à la lumière'},
     {'emoji': '📸', 'label': 'Photos', 'sub': 'S\'inspirer de ta galerie'},
@@ -169,7 +228,13 @@ class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScree
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
-                  child: _buildStepContent(context, textPrimary, textSecondary, borderColor, cardBg),
+                  child: _buildStepContent(
+                    context,
+                    textPrimary,
+                    textSecondary,
+                    borderColor,
+                    cardBg,
+                  ),
                 ),
               ),
               _bottomBar(textSecondary),
@@ -180,17 +245,18 @@ class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScree
     );
   }
 
-  Widget _progressBar(BuildContext context, Color textSecondary, Color borderColor) {
+  Widget _progressBar(
+    BuildContext context,
+    Color textSecondary,
+    Color borderColor,
+  ) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Row(
         children: [
           Text(
             '${_step + 1}/$_totalSteps',
-            style: TextStyle(
-              color: textSecondary,
-              fontWeight: FontWeight.w600,
-            ),
+            style: TextStyle(color: textSecondary, fontWeight: FontWeight.w600),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -199,7 +265,9 @@ class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScree
               child: LinearProgressIndicator(
                 value: (_step + 1) / _totalSteps,
                 backgroundColor: borderColor,
-                valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primaryPurple),
+                valueColor: const AlwaysStoppedAnimation<Color>(
+                  AppColors.primaryPurple,
+                ),
                 minHeight: 6,
               ),
             ),
@@ -209,7 +277,13 @@ class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScree
     );
   }
 
-  Widget _buildStepContent(BuildContext context, Color textPrimary, Color textSecondary, Color borderColor, Color cardBg) {
+  Widget _buildStepContent(
+    BuildContext context,
+    Color textPrimary,
+    Color textSecondary,
+    Color borderColor,
+    Color cardBg,
+  ) {
     switch (_step) {
       case 0:
         return _buildMultiSelect(
@@ -291,10 +365,23 @@ class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScree
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 16),
-            Text(title, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimary)),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: textPrimary,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text(subtitle, style: TextStyle(fontSize: 14, color: textSecondary)),
-            Text('${selected.length}/$maxSelection sélectionnés', style: TextStyle(fontSize: 12, color: AppColors.primaryPurple)),
+            Text(
+              subtitle,
+              style: TextStyle(fontSize: 14, color: textSecondary),
+            ),
+            Text(
+              '${selected.length}/$maxSelection sélectionnés',
+              style: TextStyle(fontSize: 12, color: AppColors.primaryPurple),
+            ),
             const SizedBox(height: 24),
             GridView.count(
               shrinkWrap: true,
@@ -327,7 +414,12 @@ class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScree
     );
   }
 
-  Widget _buildColorStep(Color textPrimary, Color textSecondary, Color borderColor, Color cardBg) {
+  Widget _buildColorStep(
+    Color textPrimary,
+    Color textSecondary,
+    Color borderColor,
+    Color cardBg,
+  ) {
     return FadeIn(
       key: const ValueKey(2),
       child: SingleChildScrollView(
@@ -336,10 +428,23 @@ class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScree
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 16),
-            Text("Quelles couleurs te parlent ?", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimary)),
+            Text(
+              "Quelles couleurs te parlent ?",
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: textPrimary,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text('Choisis 1-2 palettes', style: TextStyle(fontSize: 14, color: textSecondary)),
-            Text('${_colors.length}/2 sélectionnés', style: TextStyle(fontSize: 12, color: AppColors.primaryPurple)),
+            Text(
+              'Choisis 1-2 palettes',
+              style: TextStyle(fontSize: 14, color: textSecondary),
+            ),
+            Text(
+              '${_colors.length}/2 sélectionnés',
+              style: TextStyle(fontSize: 12, color: AppColors.primaryPurple),
+            ),
             const SizedBox(height: 24),
             SizedBox(
               height: 120,
@@ -381,7 +486,12 @@ class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScree
     );
   }
 
-  Widget _buildMoodStep(Color textPrimary, Color textSecondary, Color borderColor, Color cardBg) {
+  Widget _buildMoodStep(
+    Color textPrimary,
+    Color textSecondary,
+    Color borderColor,
+    Color cardBg,
+  ) {
     return FadeIn(
       key: const ValueKey(3),
       child: SingleChildScrollView(
@@ -390,9 +500,19 @@ class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScree
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 16),
-            Text("Quelle ambiance recherche ton art ?", style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimary)),
+            Text(
+              "Quelle ambiance recherche ton art ?",
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: textPrimary,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text('Choisis ton ambiance principale', style: TextStyle(fontSize: 14, color: textSecondary)),
+            Text(
+              'Choisis ton ambiance principale',
+              style: TextStyle(fontSize: 14, color: textSecondary),
+            ),
             const SizedBox(height: 24),
             GridView.count(
               shrinkWrap: true,
@@ -414,7 +534,8 @@ class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScree
                     textSecondary: textSecondary,
                     borderColor: borderColor,
                     cardBg: cardBg,
-                    onTap: () => setState(() => _mood = isSelected ? null : label),
+                    onTap: () =>
+                        setState(() => _mood = isSelected ? null : label),
                   ),
                 );
               }).toList(),
@@ -426,7 +547,13 @@ class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScree
   }
 
   Widget _buildComplexityStep(Color textPrimary, Color textSecondary) {
-    const labels = ['Minimal', 'Simple', 'Équilibré', 'Détaillé', 'Très détaillé'];
+    const labels = [
+      'Minimal',
+      'Simple',
+      'Équilibré',
+      'Détaillé',
+      'Très détaillé',
+    ];
     const emojis = ['⚪', '🔵', '🟢', '🟠', '🔴'];
     return FadeIn(
       key: const ValueKey(4),
@@ -436,13 +563,34 @@ class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScree
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 16),
-            Text('Quel niveau de détail préfères-tu ?', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimary)),
+            Text(
+              'Quel niveau de détail préfères-tu ?',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: textPrimary,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text('De simple à très détaillé', style: TextStyle(fontSize: 14, color: textSecondary)),
+            Text(
+              'De simple à très détaillé',
+              style: TextStyle(fontSize: 14, color: textSecondary),
+            ),
             const SizedBox(height: 32),
-            Text('${emojis[_complexity - 1]} ${labels[_complexity - 1]}', textAlign: TextAlign.center, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: AppColors.primaryPurple)),
+            Text(
+              '${emojis[_complexity - 1]} ${labels[_complexity - 1]}',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: AppColors.primaryPurple,
+              ),
+            ),
             SliderTheme(
-              data: SliderTheme.of(context).copyWith(activeTrackColor: AppColors.primaryPurple, thumbColor: AppColors.primaryPurple),
+              data: SliderTheme.of(context).copyWith(
+                activeTrackColor: AppColors.primaryPurple,
+                thumbColor: AppColors.primaryPurple,
+              ),
               child: Slider(
                 value: _complexity.toDouble(),
                 min: 1,
@@ -453,7 +601,18 @@ class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScree
             ),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: List.generate(5, (i) => Text('${emojis[i]}', style: TextStyle(fontSize: 16, color: i + 1 == _complexity ? AppColors.primaryPurple : textSecondary))),
+              children: List.generate(
+                5,
+                (i) => Text(
+                  '${emojis[i]}',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: i + 1 == _complexity
+                        ? AppColors.primaryPurple
+                        : textSecondary,
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -461,7 +620,11 @@ class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScree
     );
   }
 
-  Widget _buildPermissionsStep(BuildContext context, Color textPrimary, Color textSecondary) {
+  Widget _buildPermissionsStep(
+    BuildContext context,
+    Color textPrimary,
+    Color textSecondary,
+  ) {
     final cardBg = context.cardBackgroundColor;
     return FadeIn(
       key: const ValueKey(5),
@@ -471,9 +634,19 @@ class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScree
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 16),
-            Text('Personnalisation contextuelle', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimary)),
+            Text(
+              'Personnalisation contextuelle',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: textPrimary,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text('Laisse VisionArt s\'adapter à ton moment', style: TextStyle(fontSize: 14, color: textSecondary)),
+            Text(
+              'Laisse VisionArt s\'adapter à ton moment',
+              style: TextStyle(fontSize: 14, color: textSecondary),
+            ),
             const SizedBox(height: 24),
             ..._permissionOptions.asMap().entries.map((e) {
               final i = e.key;
@@ -490,19 +663,37 @@ class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScree
                   margin: const EdgeInsets.only(bottom: 12),
                   color: cardBg,
                   child: SwitchListTile(
-                    secondary: Text(opt['emoji']!, style: const TextStyle(fontSize: 24)),
-                    title: Text(opt['label']!, style: TextStyle(color: textPrimary, fontWeight: FontWeight.w600)),
-                    subtitle: Text(opt['sub']!, style: TextStyle(fontSize: 12, color: textSecondary)),
+                    secondary: Text(
+                      opt['emoji']!,
+                      style: const TextStyle(fontSize: 24),
+                    ),
+                    title: Text(
+                      opt['label']!,
+                      style: TextStyle(
+                        color: textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    subtitle: Text(
+                      opt['sub']!,
+                      style: TextStyle(fontSize: 12, color: textSecondary),
+                    ),
                     value: value,
                     activeColor: AppColors.primaryPurple,
                     onChanged: (v) {
                       setState(() {
-                        if (i == 0) _permissions = _permissions.copyWith(location: v);
-                        if (i == 1) _permissions = _permissions.copyWith(weather: v);
-                        if (i == 2) _permissions = _permissions.copyWith(music: v);
-                        if (i == 3) _permissions = _permissions.copyWith(calendar: v);
-                        if (i == 4) _permissions = _permissions.copyWith(timeOfDay: v);
-                        if (i == 5) _permissions = _permissions.copyWith(gallery: v);
+                        if (i == 0)
+                          _permissions = _permissions.copyWith(location: v);
+                        if (i == 1)
+                          _permissions = _permissions.copyWith(weather: v);
+                        if (i == 2)
+                          _permissions = _permissions.copyWith(music: v);
+                        if (i == 3)
+                          _permissions = _permissions.copyWith(calendar: v);
+                        if (i == 4)
+                          _permissions = _permissions.copyWith(timeOfDay: v);
+                        if (i == 5)
+                          _permissions = _permissions.copyWith(gallery: v);
                       });
                     },
                   ),
@@ -524,15 +715,51 @@ class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScree
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const SizedBox(height: 24),
-            Text('Prêt à créer !', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: textPrimary)),
+            Text(
+              'Prêt à créer !',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: textPrimary,
+              ),
+            ),
             const SizedBox(height: 8),
-            Text('Voici ton profil artistique', style: TextStyle(fontSize: 14, color: textSecondary)),
+            Text(
+              'Voici ton profil artistique',
+              style: TextStyle(fontSize: 14, color: textSecondary),
+            ),
             const SizedBox(height: 24),
-            _SummaryChip(label: 'Sujets', values: _subjects, textPrimary: textPrimary, textSecondary: textSecondary),
-            _SummaryChip(label: 'Styles', values: _styles, textPrimary: textPrimary, textSecondary: textSecondary),
-            _SummaryChip(label: 'Couleurs', values: _colors, textPrimary: textPrimary, textSecondary: textSecondary),
-            if (_mood != null) _SummaryChip(label: 'Ambiance', values: [_mood!], textPrimary: textPrimary, textSecondary: textSecondary),
-            _SummaryChip(label: 'Détail', values: ['Niveau $_complexity'], textPrimary: textPrimary, textSecondary: textSecondary),
+            _SummaryChip(
+              label: 'Sujets',
+              values: _subjects,
+              textPrimary: textPrimary,
+              textSecondary: textSecondary,
+            ),
+            _SummaryChip(
+              label: 'Styles',
+              values: _styles,
+              textPrimary: textPrimary,
+              textSecondary: textSecondary,
+            ),
+            _SummaryChip(
+              label: 'Couleurs',
+              values: _colors,
+              textPrimary: textPrimary,
+              textSecondary: textSecondary,
+            ),
+            if (_mood != null)
+              _SummaryChip(
+                label: 'Ambiance',
+                values: [_mood!],
+                textPrimary: textPrimary,
+                textSecondary: textSecondary,
+              ),
+            _SummaryChip(
+              label: 'Détail',
+              values: ['Niveau $_complexity'],
+              textPrimary: textPrimary,
+              textSecondary: textSecondary,
+            ),
           ],
         ),
       ),
@@ -546,42 +773,63 @@ class _PreferencesOnboardingScreenState extends State<PreferencesOnboardingScree
         mainAxisSize: MainAxisSize.min,
         children: [
           if (_saving)
-            const Center(child: CircularProgressIndicator(color: AppColors.primaryPurple))
+            const Center(
+              child: CircularProgressIndicator(color: AppColors.primaryPurple),
+            )
           else ...[
             Row(
               children: [
                 if (_step > 0)
                   TextButton(
                     onPressed: _back,
-                    child: Text('Retour', style: TextStyle(color: textSecondary)),
+                    child: Text(
+                      'Retour',
+                      style: TextStyle(color: textSecondary),
+                    ),
                   ),
                 const Spacer(),
                 if (_step < _totalSteps - 1 && _step < 5)
                   TextButton(
                     onPressed: _skip,
-                    child: Text('Plus tard', style: TextStyle(color: AppColors.accentPink)),
+                    child: Text(
+                      'Plus tard',
+                      style: TextStyle(color: AppColors.accentPink),
+                    ),
                   ),
-                const SizedBox(width: 8),
-                FilledButton(
-                  onPressed: _saving ? null : _next,
-                  style: FilledButton.styleFrom(
-                    backgroundColor: AppColors.primaryPurple,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: Text(
-                    _step == _totalSteps - 2
-                        ? 'Confirmer mes préférences'
-                        : _step == _totalSteps - 1
-                            ? (widget.initialPreferences != null ? 'Enregistrer' : 'Créer mon premier chef-d\'œuvre')
-                            : 'Suivant',
-                  ),
-                ),
               ],
             ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _saving ? null : _next,
+                style: FilledButton.styleFrom(
+                  backgroundColor: AppColors.primaryPurple,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                child: Text(
+                  _step == _totalSteps - 2
+                      ? 'Confirmer mes préférences'
+                      : _step == _totalSteps - 1
+                      ? (widget.initialPreferences != null
+                            ? 'Enregistrer'
+                            : 'Créer mon premier chef-d\'œuvre')
+                      : 'Suivant',
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
             if (_step == _totalSteps - 1)
-              TextButton(
-                onPressed: () => widget.onComplete(),
-                child: Text('Explorer sans générer', style: TextStyle(color: textSecondary, fontSize: 12)),
+              Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: TextButton(
+                  onPressed: () => widget.onComplete(),
+                  child: Text(
+                    'Explorer sans générer',
+                    style: TextStyle(color: textSecondary, fontSize: 12),
+                  ),
+                ),
               ),
           ],
         ],
@@ -622,7 +870,10 @@ class _OptionCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isSelected ? AppColors.primaryPurple : borderColor, width: isSelected ? 2 : 1),
+          border: Border.all(
+            color: isSelected ? AppColors.primaryPurple : borderColor,
+            width: isSelected ? 2 : 1,
+          ),
           color: isSelected ? AppColors.primaryPurple.withOpacity(0.2) : cardBg,
         ),
         child: Column(
@@ -630,8 +881,24 @@ class _OptionCard extends StatelessWidget {
           children: [
             Text(emoji, style: const TextStyle(fontSize: 28)),
             const SizedBox(height: 4),
-            Text(label, textAlign: TextAlign.center, maxLines: 2, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textPrimary)),
-            Text(sub, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10, color: textSecondary)),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: textPrimary,
+              ),
+            ),
+            Text(
+              sub,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 10, color: textSecondary),
+            ),
           ],
         ),
       ),
@@ -672,7 +939,10 @@ class _ColorCard extends StatelessWidget {
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: isSelected ? AppColors.primaryPurple : borderColor, width: isSelected ? 2 : 1),
+          border: Border.all(
+            color: isSelected ? AppColors.primaryPurple : borderColor,
+            width: isSelected ? 2 : 1,
+          ),
           color: isSelected ? AppColors.primaryPurple.withOpacity(0.2) : cardBg,
         ),
         child: Column(
@@ -680,8 +950,22 @@ class _ColorCard extends StatelessWidget {
           children: [
             Text(emoji, style: const TextStyle(fontSize: 32)),
             const SizedBox(height: 8),
-            Text(label, textAlign: TextAlign.center, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textPrimary)),
-            Text(sub, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 10, color: textSecondary)),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: textPrimary,
+              ),
+            ),
+            Text(
+              sub,
+              textAlign: TextAlign.center,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 10, color: textSecondary),
+            ),
           ],
         ),
       ),
@@ -710,8 +994,22 @@ class _SummaryChip extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SizedBox(width: 80, child: Text('$label:', style: TextStyle(fontWeight: FontWeight.w600, color: textSecondary))),
-          Expanded(child: Text(values.join(', '), style: TextStyle(color: textPrimary))),
+          SizedBox(
+            width: 80,
+            child: Text(
+              '$label:',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: textSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              values.join(', '),
+              style: TextStyle(color: textPrimary),
+            ),
+          ),
         ],
       ),
     );

@@ -79,16 +79,25 @@ class _PreferencesContextState extends State<PreferencesContext> {
               borderRadius: BorderRadius.circular(8),
               border: Border.all(color: Colors.blue.withOpacity(0.3)),
             ),
-            child: Text(
-              '🔐 Your privacy matters. We only use context data you explicitly consent to. All permissions default to OFF (opt-in).',
-              style: TextStyle(fontSize: 12, color: Colors.blue),
+            child: Row(
+              children: [
+                Icon(Icons.lock_rounded, size: 16, color: Colors.blue),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Your privacy matters. We only use context data you explicitly consent to. All permissions default to OFF (opt-in).',
+                    style: TextStyle(fontSize: 12, color: Colors.blue),
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 24),
 
           // Location Context
           _buildPermissionToggle(
-            title: '📍 Location Context',
+            icon: Icons.location_on_rounded,
+            title: 'Location Context',
             description: 'Use your location to influence art generation',
             value: _enableLocation,
             onChanged: (val) => setState(() => _enableLocation = val),
@@ -98,7 +107,8 @@ class _PreferencesContextState extends State<PreferencesContext> {
 
           // Weather Context
           _buildPermissionToggle(
-            title: '🌤️ Weather Context',
+            icon: Icons.wb_sunny_rounded,
+            title: 'Weather Context',
             description: 'Use current weather to inspire generation',
             value: _enableWeather,
             onChanged: (val) => setState(() => _enableWeather = val),
@@ -107,7 +117,8 @@ class _PreferencesContextState extends State<PreferencesContext> {
 
           // Calendar Context
           _buildPermissionToggle(
-            title: '📅 Calendar Context',
+            icon: Icons.calendar_today_rounded,
+            title: 'Calendar Context',
             description: 'Use calendar events for context-aware generation',
             value: _enableCalendar,
             onChanged: (val) => setState(() => _enableCalendar = val),
@@ -116,7 +127,8 @@ class _PreferencesContextState extends State<PreferencesContext> {
 
           // Music Context
           _buildPermissionToggle(
-            title: '🎵 Music Context',
+            icon: Icons.music_note_rounded,
+            title: 'Music Context',
             description: 'Use your music preferences to influence style',
             value: _enableMusic,
             onChanged: (val) => setState(() => _enableMusic = val),
@@ -125,7 +137,8 @@ class _PreferencesContextState extends State<PreferencesContext> {
 
           // Time Context (always available, user shown for transparency)
           _buildPermissionToggle(
-            title: '⏰ Time Context',
+            icon: Icons.access_time_rounded,
+            title: 'Time Context',
             description: 'Use time of day to influence generation',
             value: _enableTime,
             onChanged: (val) => setState(() => _enableTime = val),
@@ -161,6 +174,7 @@ class _PreferencesContextState extends State<PreferencesContext> {
   }
 
   Widget _buildPermissionToggle({
+    required IconData icon,
     required String title,
     required String description,
     required bool value,
@@ -177,30 +191,44 @@ class _PreferencesContextState extends State<PreferencesContext> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: context.textPrimaryColor,
-                    ),
+                  Row(
+                    children: [
+                      Icon(icon, size: 18, color: context.textPrimaryColor),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: context.textPrimaryColor,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    description,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: context.textSecondaryColor,
+                  Padding(
+                    padding: const EdgeInsets.only(left: 26),
+                    child: Text(
+                      description,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: context.textSecondaryColor,
+                      ),
                     ),
                   ),
                   if (note != null) ...[
                     const SizedBox(height: 4),
-                    Text(
-                      note,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.green.withOpacity(0.7),
-                        fontStyle: FontStyle.italic,
+                    Padding(
+                      padding: const EdgeInsets.only(left: 26),
+                      child: Text(
+                        note,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Colors.green.withOpacity(0.7),
+                          fontStyle: FontStyle.italic,
+                        ),
                       ),
                     ),
                   ],
@@ -216,7 +244,7 @@ class _PreferencesContextState extends State<PreferencesContext> {
         ),
         if (child != null) ...[
           const SizedBox(height: 12),
-          Padding(padding: const EdgeInsets.only(left: 12), child: child),
+          Padding(padding: const EdgeInsets.only(left: 26), child: child),
         ],
       ],
     );

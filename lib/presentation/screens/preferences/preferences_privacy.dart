@@ -63,7 +63,10 @@ class _PreferencesPrivacyState extends State<PreferencesPrivacy> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Data Retention
-          _buildSectionTitle('📦 Data Retention Policy'),
+          _buildSectionTitle(
+            'Data Retention Policy',
+            Icons.inventory_2_rounded,
+          ),
           Text(
             'How long to keep your generated images',
             style: TextStyle(fontSize: 12, color: context.textSecondaryColor),
@@ -73,27 +76,27 @@ class _PreferencesPrivacyState extends State<PreferencesPrivacy> {
           const SizedBox(height: 24),
 
           // Training Data
-          _buildSectionTitle('🤖 AI Training Data'),
+          _buildSectionTitle('AI Training Data', Icons.psychology_rounded),
           _buildPrivacyToggle(
             title: 'Allow AI Training',
             description:
                 'Help us improve generation quality by using your data',
             value: _allowDataForTraining,
             onChanged: (val) => setState(() => _allowDataForTraining = val),
-            icon: '🤖',
+            icon: Icons.smart_toy_rounded,
             warningText:
                 'Your images may be used to train our models (anonymized)',
           ),
           const SizedBox(height: 24),
 
           // Public Sharing
-          _buildSectionTitle('🌐 Public Sharing'),
+          _buildSectionTitle('Public Sharing', Icons.public_rounded),
           _buildPrivacyToggle(
             title: 'Share Generations Publicly',
             description: 'Share your artworks in the community gallery',
             value: _shareGenerationsPublicly,
             onChanged: (val) => setState(() => _shareGenerationsPublicly = val),
-            icon: '🌐',
+            icon: Icons.share_rounded,
           ),
           const SizedBox(height: 32),
 
@@ -107,13 +110,23 @@ class _PreferencesPrivacyState extends State<PreferencesPrivacy> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  '⚖️ GDPR Compliance',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: context.textPrimaryColor,
-                  ),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.gavel_rounded,
+                      size: 16,
+                      color: context.textPrimaryColor,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'GDPR Compliance',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.bold,
+                        color: context.textPrimaryColor,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
                 Text(
@@ -155,16 +168,22 @@ class _PreferencesPrivacyState extends State<PreferencesPrivacy> {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
+  Widget _buildSectionTitle(String title, IconData icon) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          color: context.textPrimaryColor,
-        ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppColors.primaryPurple),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: context.textPrimaryColor,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -203,7 +222,7 @@ class _PreferencesPrivacyState extends State<PreferencesPrivacy> {
     required String description,
     required bool value,
     required Function(bool) onChanged,
-    required String icon,
+    required IconData icon,
     String? warningText,
   }) {
     return Container(
@@ -223,7 +242,7 @@ class _PreferencesPrivacyState extends State<PreferencesPrivacy> {
                   children: [
                     Row(
                       children: [
-                        Text(icon, style: const TextStyle(fontSize: 18)),
+                        Icon(icon, size: 18, color: context.textPrimaryColor),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -238,11 +257,14 @@ class _PreferencesPrivacyState extends State<PreferencesPrivacy> {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      description,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: context.textSecondaryColor,
+                    Padding(
+                      padding: const EdgeInsets.only(left: 26),
+                      child: Text(
+                        description,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: context.textSecondaryColor,
+                        ),
                       ),
                     ),
                   ],
@@ -257,12 +279,15 @@ class _PreferencesPrivacyState extends State<PreferencesPrivacy> {
           ),
           if (warningText != null) ...[
             const SizedBox(height: 12),
-            Text(
-              warningText,
-              style: TextStyle(
-                fontSize: 11,
-                color: Colors.orange.withOpacity(0.8),
-                fontStyle: FontStyle.italic,
+            Padding(
+              padding: const EdgeInsets.only(left: 26),
+              child: Text(
+                warningText,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Colors.orange.withOpacity(0.8),
+                  fontStyle: FontStyle.italic,
+                ),
               ),
             ),
           ],

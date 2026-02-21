@@ -28,7 +28,7 @@ class PreferencesScreen extends StatefulWidget {
 }
 
 class _PreferencesScreenState extends State<PreferencesScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   late PreferencesService _preferencesService;
   late TabController _tabController;
   UserPreferences? _preferences;
@@ -39,13 +39,22 @@ class _PreferencesScreenState extends State<PreferencesScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _preferencesService = PreferencesService();
     _tabController = TabController(length: 4, vsync: this);
     _loadPreferences();
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _loadPreferences();
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _tabController.dispose();
     super.dispose();
   }
@@ -117,10 +126,10 @@ class _PreferencesScreenState extends State<PreferencesScreen>
             unselectedLabelColor: context.textSecondaryColor,
             indicatorColor: AppColors.primaryPurple,
             tabs: const [
-              Tab(text: '🎨 Aesthetic'),
-              Tab(text: '🌍 Context'),
-              Tab(text: '🔒 Privacy'),
-              Tab(text: '⚙️ UI/UX'),
+              Tab(icon: Icon(Icons.brush_rounded), text: 'Aesthetic'),
+              Tab(icon: Icon(Icons.travel_explore_rounded), text: 'Context'),
+              Tab(icon: Icon(Icons.security_rounded), text: 'Privacy'),
+              Tab(icon: Icon(Icons.display_settings_rounded), text: 'UI/UX'),
             ],
           ),
         ),
