@@ -17,6 +17,16 @@ class PreferencesAesthetic extends StatefulWidget {
   final PreferencesService preferencesService;
   final Function(UserPreferences) onUpdated;
 
+  // French mood labels to match onboarding screen
+  static const List<String> _frenchMoods = [
+    'Calme',
+    'Énergique',
+    'Mélancolique',
+    'Mystérieux',
+    'Joyeux',
+    'Rêveur',
+  ];
+
   @override
   State<PreferencesAesthetic> createState() => _PreferencesAestheticState();
 }
@@ -85,8 +95,38 @@ class _PreferencesAestheticState extends State<PreferencesAesthetic> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Info banner
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.primaryBlue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: AppColors.primaryBlue.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  color: AppColors.primaryBlue,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Your aesthetic preferences are saved to your account and synced across all your devices.',
+                    style: TextStyle(
+                      color: AppColors.primaryBlue,
+                      fontSize: 12,
+                      height: 1.4,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
           // Favorite Styles
-          _buildSectionTitle('🎨 Favorite Art Styles'),
+          _buildSectionTitle(Icons.brush_rounded, 'Favorite Art Styles'),
           _buildChipGrid(
             options: StyleOptions.availableStyles,
             selected: _selectedStyles,
@@ -95,7 +135,7 @@ class _PreferencesAestheticState extends State<PreferencesAesthetic> {
           const SizedBox(height: 24),
 
           // Favorite Colors
-          _buildSectionTitle('🎯 Favorite Colors'),
+          _buildSectionTitle(Icons.palette_rounded, 'Favorite Colors'),
           _buildChipGrid(
             options: StyleOptions.availableColors,
             selected: _selectedColors,
@@ -104,17 +144,20 @@ class _PreferencesAestheticState extends State<PreferencesAesthetic> {
           const SizedBox(height: 24),
 
           // Preferred Mood
-          _buildSectionTitle('💭 Preferred Mood'),
+          _buildSectionTitle(
+            Icons.sentiment_satisfied_rounded,
+            'Preferred Mood',
+          ),
           _buildDropdown(
             value: _selectedMood,
-            options: StyleOptions.availableMoods,
+            options: PreferencesAesthetic._frenchMoods,
             onChanged: (val) => setState(() => _selectedMood = val),
             hintText: 'Select mood (optional)',
           ),
           const SizedBox(height: 24),
 
           // Art Complexity
-          _buildSectionTitle('📊 Art Complexity Level'),
+          _buildSectionTitle(Icons.show_chart_rounded, 'Art Complexity Level'),
           _buildRadioGroup(
             value: _selectedComplexity,
             options: StyleOptions.complexityLevels,
@@ -154,16 +197,24 @@ class _PreferencesAestheticState extends State<PreferencesAesthetic> {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
+  Widget _buildSectionTitle(IconData icon, String title) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          color: context.textPrimaryColor,
-        ),
+      child: Row(
+        children: [
+          Icon(icon, color: AppColors.primaryBlue, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: context.textPrimaryColor,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

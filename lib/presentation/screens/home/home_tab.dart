@@ -2,18 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-
 import '../../../core/services/artwork_service.dart';
 import '../../../core/services/follow_service.dart';
 import '../../../core/models/artwork_model.dart';
 import '../../../core/models/user_model.dart';
-import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
 import '../splash/widgets/smoke_background.dart';
 import 'post_detail_screen.dart';
 import '../profile/profile_inspect_screen.dart';
 
-/// Home tab: live feed from backend with follow functionality
 class HomeTab extends StatefulWidget {
   const HomeTab({
     super.key,
@@ -41,7 +38,6 @@ class _HomeTabState extends State<HomeTab> {
   bool _isLoadingFeed = false;
   bool _hasMore = true;
   int _currentPage = 1;
-  Map<String, bool> _followingMap = {}; // Track follow status per user
 
   @override
   void initState() {
@@ -84,50 +80,46 @@ class _HomeTabState extends State<HomeTab> {
         _hasMore = _currentPage < result.totalPages;
         _currentPage++;
       });
-    } catch (e) {
-      print('Error loading feed: $e');
+    } catch (_) {
       setState(() => _isLoadingFeed = false);
     }
   }
 
-  Future<void> _toggleFollow(String userId, int index) async {
-    try {
-      final isCurrentlyFollowing = _followingMap[userId] ?? false;
+  Future<void> _toggleFollow(int artworkIndex) async {
+    final artwork = _artworks[artworkIndex];
+    final userId = artwork.user.id;
+    final isCurrentlyFollowing = artwork.isFollowedByMe;
 
+    try {
       if (isCurrentlyFollowing) {
         await _followService.unfollowUser(userId);
-        setState(() => _followingMap[userId] = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Unfollowed successfully'),
-              duration: Duration(seconds: 1),
-            ),
-          );
-        }
       } else {
         await _followService.followUser(userId);
-        setState(() => _followingMap[userId] = true);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Followed successfully'),
-              duration: Duration(seconds: 1),
-            ),
-          );
-        }
       }
-    } catch (e) {
-      print('Error toggling follow: $e');
+
       if (mounted) {
+        // Update the follow status for ALL artworks from this user in the feed
+        setState(() {
+          _artworks = _artworks.map((a) {
+            if (a.user.id == userId) {
+              return a.copyWith(isFollowedByMe: !isCurrentlyFollowing);
+            }
+            return a;
+          }).toList();
+        });
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error: $e'),
-            duration: const Duration(seconds: 2),
+            content: Text(
+              isCurrentlyFollowing
+                  ? 'Unfollowed successfully'
+                  : 'Followed successfully',
+            ),
+            duration: const Duration(seconds: 1),
           ),
         );
       }
-    }
+    } catch (_) {}
   }
 
   @override
@@ -142,65 +134,19 @@ class _HomeTabState extends State<HomeTab> {
             : CustomScrollView(
                 controller: _scrollController,
                 slivers: [
-                  // Header: greeting + followers + theme toggle
                   SliverToBoxAdapter(
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
                       child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Welcome, ${widget.userName}',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineMedium
-                                      ?.copyWith(
-                                        color: textPrimary,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                ),
-                                const SizedBox(height: 6),
-                                if (widget.currentUser != null)
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.people_rounded,
-                                        size: 18,
-                                        color: textSecondary,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        '${widget.currentUser!.followersCount} followers · ${widget.currentUser!.publicGenerationsCount} posts',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(color: textSecondary),
-                                      ),
-                                    ],
-                                  )
-                                else
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        Icons.people_rounded,
-                                        size: 18,
-                                        color: textSecondary,
-                                      ),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Loading...',
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .bodySmall
-                                            ?.copyWith(color: textSecondary),
-                                      ),
-                                    ],
+                            child: Text(
+                              'Welcome, ${widget.userName}',
+                              style: Theme.of(context).textTheme.headlineMedium
+                                  ?.copyWith(
+                                    color: textPrimary,
+                                    fontWeight: FontWeight.w700,
                                   ),
-                              ],
                             ),
                           ),
                           IconButton(
@@ -211,54 +157,28 @@ class _HomeTabState extends State<HomeTab> {
                                   : Icons.dark_mode_rounded,
                               color: textPrimary,
                             ),
-                            tooltip: context.isDark
-                                ? 'Switch to light mode'
-                                : 'Switch to dark mode',
                           ),
                         ],
                       ),
                     ),
                   ),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-                      child: Text(
-                        'Feed',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(
-                              color: textSecondary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                    ),
-                  ),
-                  // Feed list
                   if (_artworks.isEmpty && !_isLoadingFeed)
                     SliverToBoxAdapter(
-                      child: Center(
-                        child: Padding(
-                          padding: const EdgeInsets.all(32),
-                          child: Column(
-                            children: [
-                              Icon(
-                                Icons.image_not_supported,
-                                size: 64,
-                                color: textSecondary,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'No artworks in your feed yet',
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(color: textSecondary),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Follow more users to see their artworks',
-                                style: Theme.of(context).textTheme.bodySmall
-                                    ?.copyWith(color: textSecondary),
-                              ),
-                            ],
-                          ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.image_not_supported,
+                              size: 64,
+                              color: textSecondary,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No artworks in your feed yet',
+                              style: TextStyle(color: textSecondary),
+                            ),
+                          ],
                         ),
                       ),
                     )
@@ -281,6 +201,10 @@ class _HomeTabState extends State<HomeTab> {
                               }
 
                               final artwork = _artworks[index];
+                              final isOwnPost =
+                                  widget.currentUser != null &&
+                                  widget.currentUser!.id == artwork.user.id;
+
                               return AnimationConfiguration.staggeredList(
                                 position: index,
                                 duration: const Duration(milliseconds: 400),
@@ -293,13 +217,14 @@ class _HomeTabState extends State<HomeTab> {
                                       ),
                                       child: _FeedCard(
                                         artwork: artwork,
+                                        isOwnPost: isOwnPost,
                                         textPrimary: textPrimary,
                                         textSecondary: textSecondary,
                                         onTapAuthor: () {
                                           Navigator.push(
                                             context,
                                             MaterialPageRoute(
-                                              builder: (context) =>
+                                              builder: (_) =>
                                                   ProfileInspectScreen(
                                                     userId: artwork.user.id,
                                                     initialUser: artwork.user,
@@ -308,13 +233,14 @@ class _HomeTabState extends State<HomeTab> {
                                           );
                                         },
                                         onTapCard: () {
-                                          Navigator.of(context).push(
+                                          Navigator.push(
+                                            context,
                                             PostDetailScreen.route(
                                               PostDetailScreen(
                                                 author: artwork.user.name,
                                                 avatarEmoji:
                                                     artwork.user.avatarUrl ??
-                                                    '🎨',
+                                                    '\u{1F3A8}',
                                                 quote:
                                                     artwork.description ?? '',
                                                 imageUrl: artwork.imageUrl,
@@ -328,12 +254,7 @@ class _HomeTabState extends State<HomeTab> {
                                             ),
                                           );
                                         },
-                                        onTapFollow: () async {
-                                          await _toggleFollow(
-                                            artwork.user.id,
-                                            index,
-                                          );
-                                        },
+                                        onTapFollow: () => _toggleFollow(index),
                                       ),
                                     ),
                                   ),
@@ -356,81 +277,33 @@ class _HomeTabState extends State<HomeTab> {
   Widget _buildShimmer(BuildContext context) {
     final border = context.borderColor;
     final secondary = context.textSecondaryColor;
+
     return Padding(
       padding: const EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Shimmer.fromColors(
-            baseColor: border,
-            highlightColor: secondary.withOpacity(0.3),
-            child: Container(
-              height: 32,
-              width: 200,
-              decoration: BoxDecoration(
-                color: border,
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
+      child: Shimmer.fromColors(
+        baseColor: border,
+        highlightColor: secondary.withOpacity(0.3),
+        child: Container(
+          height: 220,
+          width: double.infinity,
+          decoration: BoxDecoration(
+            color: border,
+            borderRadius: BorderRadius.circular(16),
           ),
-          const SizedBox(height: 8),
-          Shimmer.fromColors(
-            baseColor: border,
-            highlightColor: secondary.withOpacity(0.3),
-            child: Container(
-              height: 18,
-              width: 160,
-              decoration: BoxDecoration(
-                color: border,
-                borderRadius: BorderRadius.circular(6),
-              ),
-            ),
-          ),
-          const SizedBox(height: 24),
-          Shimmer.fromColors(
-            baseColor: border,
-            highlightColor: secondary.withOpacity(0.3),
-            child: Container(
-              height: 220,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: border,
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Shimmer.fromColors(
-            baseColor: border,
-            highlightColor: secondary.withOpacity(0.3),
-            child: Container(
-              height: 220,
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: border,
-                borderRadius: BorderRadius.circular(16),
-              ),
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
 
   String _formatTime(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
+    final difference = DateTime.now().difference(dateTime);
 
-    if (difference.inSeconds < 60) {
-      return 'now';
-    } else if (difference.inMinutes < 60) {
+    if (difference.inMinutes < 60) {
       return '${difference.inMinutes}m ago';
     } else if (difference.inHours < 24) {
       return '${difference.inHours}h ago';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays}d ago';
     } else {
-      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+      return '${difference.inDays}d ago';
     }
   }
 }
@@ -438,6 +311,7 @@ class _HomeTabState extends State<HomeTab> {
 class _FeedCard extends StatefulWidget {
   const _FeedCard({
     required this.artwork,
+    required this.isOwnPost,
     required this.textPrimary,
     required this.textSecondary,
     required this.onTapAuthor,
@@ -446,6 +320,7 @@ class _FeedCard extends StatefulWidget {
   });
 
   final ArtworkModel artwork;
+  final bool isOwnPost;
   final Color textPrimary;
   final Color textSecondary;
   final VoidCallback onTapAuthor;
@@ -457,258 +332,94 @@ class _FeedCard extends StatefulWidget {
 }
 
 class _FeedCardState extends State<_FeedCard> {
-  late bool _isLiked;
-
-  @override
-  void initState() {
-    super.initState();
-    _isLiked = widget.artwork.isLikedByMe;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final cardBg = context.cardBackgroundColor;
-    final border = context.borderColor;
+    final isFollowing = widget.artwork.isFollowedByMe;
 
     return GestureDetector(
       onTap: widget.onTapCard,
       child: Container(
+        padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: cardBg,
+          color: context.cardBackgroundColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: border.withOpacity(0.6)),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryPurple.withOpacity(0.08),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
         ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Author row with follow button
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-                child: Row(
-                  children: [
-                    GestureDetector(
-                      onTap: widget.onTapAuthor,
-                      child: CircleAvatar(
-                        radius: 20,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                GestureDetector(
+                  onTap: widget.onTapAuthor,
+                  child: Row(
+                    children: [
+                      CircleAvatar(
                         backgroundImage: widget.artwork.user.avatarUrl != null
                             ? NetworkImage(widget.artwork.user.avatarUrl!)
                             : null,
-                        backgroundColor: AppColors.primaryPurple.withOpacity(
-                          0.3,
-                        ),
                         child: widget.artwork.user.avatarUrl == null
-                            ? const Icon(Icons.person)
+                            ? Text(
+                                widget.artwork.user.name.isNotEmpty
+                                    ? widget.artwork.user.name[0].toUpperCase()
+                                    : '?',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              )
                             : null,
                       ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: GestureDetector(
-                        onTap: widget.onTapAuthor,
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              children: [
-                                Text(
-                                  widget.artwork.user.name,
-                                  style: Theme.of(context).textTheme.titleSmall
-                                      ?.copyWith(
-                                        color: widget.textPrimary,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                ),
-                                if (widget.artwork.user.isVerified) ...[
-                                  const SizedBox(width: 4),
-                                  const Icon(
-                                    Icons.verified,
-                                    size: 14,
-                                    color: Colors.blue,
-                                  ),
-                                ],
-                              ],
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.artwork.user.name,
+                            style: TextStyle(
+                              color: widget.textPrimary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
                             ),
+                          ),
+                          if (widget.artwork.title != null &&
+                              widget.artwork.title!.isNotEmpty)
                             Text(
-                              _formatTime(widget.artwork.createdAt),
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(
-                                    color: widget.textSecondary,
-                                    fontSize: 12,
-                                  ),
+                              widget.artwork.title!,
+                              style: TextStyle(
+                                color: widget.textSecondary,
+                                fontSize: 12,
+                              ),
                             ),
-                          ],
-                        ),
+                        ],
                       ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.person_add),
-                      onPressed: widget.onTapFollow,
-                      tooltip: 'Follow user',
-                    ),
-                  ],
-                ),
-              ),
-              // AI-generated image
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  height: 180,
-                  width: double.infinity,
-                  margin: const EdgeInsets.symmetric(horizontal: 12),
-                  color: Colors.grey[300],
-                  child: CachedNetworkImage(
-                    imageUrl: widget.artwork.imageUrl,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: 180,
-                    placeholder: (_, __) => Center(
-                      child: Icon(
-                        Icons.auto_awesome,
-                        size: 48,
-                        color: Colors.white.withOpacity(0.9),
-                      ),
-                    ),
-                    errorWidget: (_, __, ___) => Center(
-                      child: Icon(
-                        Icons.broken_image,
-                        size: 48,
-                        color: Colors.white.withOpacity(0.9),
-                      ),
-                    ),
+                    ],
                   ),
                 ),
-              ),
-              // Title (if exists)
-              if (widget.artwork.title != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
-                  child: Text(
-                    widget.artwork.title!,
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      color: widget.textPrimary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              // Description
-              if (widget.artwork.description != null)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-                  child: Text(
-                    widget.artwork.description!,
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: widget.textSecondary,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              // Actions: like, comment, share
-              Padding(
-                padding: const EdgeInsets.fromLTRB(12, 4, 12, 14),
-                child: Row(
-                  children: [
-                    _ActionChip(
-                      icon: _isLiked
-                          ? Icons.favorite_rounded
-                          : Icons.favorite_outline_rounded,
-                      label: '${widget.artwork.likesCount}',
-                      color: _isLiked
-                          ? AppColors.accentPink
+                const Spacer(),
+                if (!widget.isOwnPost)
+                  IconButton(
+                    icon: Icon(
+                      isFollowing
+                          ? Icons.how_to_reg_rounded
+                          : Icons.person_add_rounded,
+                      color: isFollowing
+                          ? Colors.greenAccent
                           : widget.textSecondary,
-                      onTap: () {
-                        setState(() => _isLiked = !_isLiked);
-                      },
                     ),
-                    const SizedBox(width: 16),
-                    _ActionChip(
-                      icon: Icons.chat_bubble_rounded,
-                      label: '${widget.artwork.commentsCount}',
-                      color: AppColors.primaryBlue,
-                      onTap: () {},
-                    ),
-                    const Spacer(),
-                    _ActionChip(
-                      icon: Icons.share_rounded,
-                      label: 'Share',
-                      color: widget.textSecondary,
-                      onTap: () {},
-                    ),
-                  ],
-                ),
+                    tooltip: isFollowing ? 'Following' : 'Follow',
+                    onPressed: widget.onTapFollow,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: CachedNetworkImage(
+                imageUrl: widget.artwork.imageUrl,
+                fit: BoxFit.cover,
+                width: double.infinity,
               ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  String _formatTime(DateTime dateTime) {
-    final now = DateTime.now();
-    final difference = now.difference(dateTime);
-
-    if (difference.inSeconds < 60) {
-      return 'now';
-    } else if (difference.inMinutes < 60) {
-      return '${difference.inMinutes}m ago';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays}d ago';
-    } else {
-      return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
-    }
-  }
-}
-
-class _ActionChip extends StatelessWidget {
-  const _ActionChip({
-    required this.icon,
-    required this.label,
-    required this.color,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, size: 20, color: color),
-              const SizedBox(width: 6),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

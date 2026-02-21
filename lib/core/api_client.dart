@@ -1,77 +1,87 @@
 import 'package:dio/dio.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'app_config.dart';
 
 class ApiClient {
-  static late Dio _dio;
+  static late final Dio _dio;
   static String? _token;
 
-  // Initialize the API client
+  /// Initialize API client
   static Future<void> init() async {
-    await dotenv.load();
-
-    final baseUrl = dotenv.env['API_BASE_URL'] ?? 'http://192.168.1.15:3000';
+    final baseUrl = AppConfig.apiBaseUrl;
 
     _dio = Dio(
       BaseOptions(
         baseUrl: baseUrl,
         connectTimeout: const Duration(seconds: 30),
         receiveTimeout: const Duration(seconds: 30),
-        headers: {
+        headers: const {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
       ),
     );
 
-    // Add interceptors
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
-          if (_token != null) {
+          if (_token != null && _token!.isNotEmpty) {
             options.headers['Authorization'] = 'Bearer $_token';
           }
-          return handler.next(options);
+          handler.next(options);
         },
         onError: (error, handler) {
           if (error.response?.statusCode == 401) {
-            // Handle token refresh or logout here
-            print('Unauthorized - Token may have expired');
+            handler.reject(
+              DioException(
+                requestOptions: error.requestOptions,
+                response: error.response,
+                error: SessionExpiredException(
+                  401,
+                  'Session expired. Please login again.',
+                ),
+                type: DioExceptionType.badResponse,
+              ),
+            );
+            return;
           }
-          return handler.next(error);
+          handler.next(error);
         },
       ),
     );
   }
 
-  // Get singleton instance
+  /// Dio instance
   static Dio get instance => _dio;
 
-  // Set authentication token
+  /// Set auth token
   static void setToken(String token) {
     _token = token;
   }
 
-  // Clear authentication token
+  /// Clear auth token
   static void clearToken() {
     _token = null;
   }
 
-  // Get current token
+  /// Get current token
   static String? get token => _token;
 
-  // Check if user is authenticated
-  static bool get isAuthenticated => _token != null && _token!.isNotEmpty;
+  /// Is authenticated
+  static bool get isAuthenticated =>
+      _token != null && _token!.isNotEmpty;
 }
 
 class ApiException implements Exception {
   ApiException(this.statusCode, this.message);
+
   final int statusCode;
   final String message;
+
   @override
   String toString() => message;
 }
 
 class SessionExpiredException extends ApiException {
   SessionExpiredException(int statusCode, String message)
-    : super(statusCode, message);
+      : super(statusCode, message);
 }

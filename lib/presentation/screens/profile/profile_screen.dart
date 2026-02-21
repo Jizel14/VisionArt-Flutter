@@ -3,12 +3,56 @@ import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../core/auth_service.dart';
 import '../../../core/api_client.dart';
+import '../../../core/preference_storage.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
+import '../preferences/preferences_screen.dart';
+import '../report/report_screen.dart';
 import '../splash/widgets/smoke_background.dart';
 import '../signature/signature_editor_screen.dart';
-import '../preferences/preferences_screen.dart';
 import 'edit_profile_screen.dart';
+
+Future<void> _showDeleteAccountDialog(
+  BuildContext context,
+  AuthService authService,
+  VoidCallback onLogout,
+) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Supprimer mon compte'),
+      content: const Text(
+        'Cette action supprimera définitivement votre compte et toutes vos données. Elle est irréversible.\n\nVoulez-vous vraiment continuer ?',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: const Text('Annuler'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          style: FilledButton.styleFrom(backgroundColor: AppColors.error),
+          child: const Text('Supprimer'),
+        ),
+      ],
+    ),
+  );
+  if (!context.mounted || confirmed != true) return;
+  try {
+    await authService.deleteAccount();
+    await PreferenceStorage.clear();
+    if (!context.mounted) return;
+    onLogout();
+  } catch (e) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Erreur: ${e.toString()}'),
+        backgroundColor: AppColors.error,
+      ),
+    );
+  }
+}
 
 /// Profile screen: avatar, name, email, mock stats, logout. Themed with glassmorphism.
 class ProfileScreen extends StatelessWidget {
@@ -381,6 +425,34 @@ class ProfileScreen extends StatelessWidget {
               },
             ),
           ),
+          const SizedBox(height: 12),
+          _GlassCard(
+            child: ListTile(
+              leading: Icon(
+                Icons.flag_rounded,
+                color: AppColors.error.withOpacity(0.8),
+              ),
+              title: Text(
+                'Signaler un problème',
+                style: TextStyle(
+                  color: textPrimary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              subtitle: Text(
+                'Bug, abus, contenu inapproprié',
+                style: TextStyle(color: textSecondary, fontSize: 12),
+              ),
+              trailing: Icon(Icons.chevron_right, color: textSecondary),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => ReportScreen(authService: authService),
+                  ),
+                );
+              },
+            ),
+          ),
           const SizedBox(height: 32),
           // Logout
           SizedBox(
@@ -396,6 +468,20 @@ class ProfileScreen extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          // Delete account
+          TextButton(
+            onPressed: () =>
+                _showDeleteAccountDialog(context, authService, onLogout),
+            child: Text(
+              'Supprimer mon compte',
+              style: TextStyle(
+                color: AppColors.error,
+                fontSize: 14,
+                decoration: TextDecoration.underline,
               ),
             ),
           ),

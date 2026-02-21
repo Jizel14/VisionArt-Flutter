@@ -17,6 +17,7 @@ ArtworkModel _$ArtworkModelFromJson(Map<String, dynamic> json) => ArtworkModel(
   commentsCount: _intFromJson(json['commentsCount']),
   remixCount: _intFromJson(json['remixCount']),
   isLikedByMe: json['isLikedByMe'] as bool,
+  isFollowedByMe: json['isFollowedByMe'] as bool? ?? false,
   isPublic: json['isPublic'] as bool,
   isNSFW: json['isNSFW'] as bool,
   remixedFrom: json['remixedFrom'] == null
@@ -37,6 +38,7 @@ Map<String, dynamic> _$ArtworkModelToJson(ArtworkModel instance) =>
       'commentsCount': instance.commentsCount,
       'remixCount': instance.remixCount,
       'isLikedByMe': instance.isLikedByMe,
+      'isFollowedByMe': instance.isFollowedByMe,
       'isPublic': instance.isPublic,
       'isNSFW': instance.isNSFW,
       'remixedFrom': instance.remixedFrom,
