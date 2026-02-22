@@ -70,23 +70,23 @@ class _PreferencesUIState extends State<PreferencesUI> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Language Settings
-          _buildSectionTitle('🌍 Language'),
+          _buildSectionTitle('Language', Icons.language_rounded),
           _buildLanguageSelector(),
           const SizedBox(height: 24),
 
           // Theme Settings
-          _buildSectionTitle('🎨 Theme'),
+          _buildSectionTitle('Theme', Icons.palette_rounded),
           _buildThemeSelector(),
           const SizedBox(height: 24),
 
           // Notifications
-          _buildSectionTitle('🔔 Notifications'),
+          _buildSectionTitle('Notifications', Icons.notifications_rounded),
           _buildNotificationToggle(
             title: 'Push Notifications',
             description: 'Receive in-app notifications',
             value: _notificationsEnabled,
             onChanged: (val) => setState(() => _notificationsEnabled = val),
-            icon: '📱',
+            icon: Icons.smartphone_rounded,
           ),
           const SizedBox(height: 16),
           _buildNotificationToggle(
@@ -95,7 +95,7 @@ class _PreferencesUIState extends State<PreferencesUI> {
             value: _emailNotificationsEnabled,
             onChanged: (val) =>
                 setState(() => _emailNotificationsEnabled = val),
-            icon: '📧',
+            icon: Icons.email_rounded,
           ),
           const SizedBox(height: 32),
 
@@ -126,16 +126,22 @@ class _PreferencesUIState extends State<PreferencesUI> {
     );
   }
 
-  Widget _buildSectionTitle(String title) {
+  Widget _buildSectionTitle(String title, IconData icon) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.bold,
-          color: context.textPrimaryColor,
-        ),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: AppColors.primaryPurple),
+          const SizedBox(width: 8),
+          Text(
+            title,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: context.textPrimaryColor,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -235,7 +241,7 @@ class _PreferencesUIState extends State<PreferencesUI> {
     required String description,
     required bool value,
     required Function(bool) onChanged,
-    required String icon,
+    required IconData icon,
   }) {
     return Container(
       padding: const EdgeInsets.all(12),
@@ -251,7 +257,7 @@ class _PreferencesUIState extends State<PreferencesUI> {
               children: [
                 Row(
                   children: [
-                    Text(icon, style: const TextStyle(fontSize: 18)),
+                    Icon(icon, size: 18, color: context.textPrimaryColor),
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
@@ -266,11 +272,14 @@ class _PreferencesUIState extends State<PreferencesUI> {
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  description,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: context.textSecondaryColor,
+                Padding(
+                  padding: const EdgeInsets.only(left: 26),
+                  child: Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: context.textSecondaryColor,
+                    ),
                   ),
                 ),
               ],

@@ -65,11 +65,7 @@ class AuthService {
   ) async {
     final response = await ApiClient.instance.post(
       '/auth/register',
-      data: {
-        'email': email,
-        'password': password,
-        'name': name,
-      },
+      data: {'email': email, 'password': password, 'name': name},
     );
 
     final token = response.data['access_token'] as String?;
@@ -139,8 +135,7 @@ class AuthService {
     if (website != null) body['website'] = website;
 
     try {
-      final response =
-          await ApiClient.instance.patch('/auth/me', data: body);
+      final response = await ApiClient.instance.patch('/auth/me', data: body);
 
       return Map<String, dynamic>.from(response.data ?? {});
     } on DioException catch (e) {
@@ -155,23 +150,91 @@ class AuthService {
   // PREFERENCES
   // =========================
 
-  Future<Map<String, dynamic>> updatePreferences(
-      UserPreferences p) async {
+  String _mapComplexityToBackend(int complexity) {
+    if (complexity <= 2) return 'minimal';
+    if (complexity >= 4) return 'detailed';
+    return 'moderate';
+  }
+
+  int _mapComplexityFromBackend(String? complexity) {
+    switch (complexity) {
+      case 'minimal':
+        return 1;
+      case 'detailed':
+        return 5;
+      default:
+        return 3;
+    }
+  }
+
+  UserPreferences _mapBackendToOnboardingPrefs(Map<String, dynamic> data) {
+    return UserPreferences(
+      subjects: const [],
+      styles: List<String>.from(data['favoriteStyles'] as List? ?? const []),
+      colors: List<String>.from(data['favoriteColors'] as List? ?? const []),
+      mood: data['preferredMood'] as String?,
+      complexity: _mapComplexityFromBackend(data['artComplexity'] as String?),
+      permissions: PreferencePermissions(
+        location: data['enableLocationContext'] as bool? ?? false,
+        weather: data['enableWeatherContext'] as bool? ?? false,
+        music: data['enableMusicContext'] as bool? ?? false,
+        calendar: data['enableCalendarContext'] as bool? ?? false,
+        timeOfDay: data['enableTimeContext'] as bool? ?? true,
+        gallery: false,
+      ),
+      onboardingComplete: true,
+    );
+  }
+
+  Future<UserPreferences> getOnboardingPreferences() async {
+    final token = await getToken;
+    if (token == null) throw ApiException(401, 'Not logged in');
+
+    final response = await ApiClient.instance.get('/user-preferences/me');
+    final data = Map<String, dynamic>.from(response.data ?? {});
+    return _mapBackendToOnboardingPrefs(data);
+  }
+
+  Future<bool> needsPreferencesOnboarding() async {
+    final token = await getToken;
+    if (token == null) throw ApiException(401, 'Not logged in');
+
+    final response = await ApiClient.instance.get('/user-preferences/me');
+    final data = Map<String, dynamic>.from(response.data ?? {});
+
+    final favoriteStyles = List<String>.from(
+      data['favoriteStyles'] as List? ?? const [],
+    );
+    final favoriteColors = List<String>.from(
+      data['favoriteColors'] as List? ?? const [],
+    );
+    final preferredMood = data['preferredMood'] as String?;
+    final lastStyleUpdate = data['lastStyleUpdate'];
+
+    return favoriteStyles.isEmpty &&
+        favoriteColors.isEmpty &&
+        (preferredMood == null || preferredMood.isEmpty) &&
+        lastStyleUpdate == null;
+  }
+
+  Future<Map<String, dynamic>> updatePreferences(UserPreferences p) async {
     final token = await getToken;
     if (token == null) throw ApiException(401, 'Not logged in');
 
     final body = {
-      'subjects': p.subjects,
-      'styles': p.styles,
-      'colors': p.colors,
-      'mood': p.mood,
-      'complexity': p.complexity,
-      'permissions': p.permissions.toJson(),
-      'onboardingComplete': p.onboardingComplete,
+      'favoriteStyles': p.styles,
+      'favoriteColors': p.colors,
+      'preferredMood': p.mood,
+      'artComplexity': _mapComplexityToBackend(p.complexity),
+      'enableLocationContext': p.permissions.location,
+      'enableWeatherContext': p.permissions.weather,
+      'enableCalendarContext': p.permissions.calendar,
+      'enableMusicContext': p.permissions.music,
+      'enableTimeContext': p.permissions.timeOfDay,
     };
 
     final response = await ApiClient.instance.patch(
-      '/auth/me/preferences',
+      '/user-preferences/me',
       data: body,
     );
 
@@ -193,10 +256,7 @@ class AuthService {
   Future<void> resetPassword(String token, String newPassword) async {
     await ApiClient.instance.post(
       '/auth/reset-password',
-      data: {
-        'token': token,
-        'newPassword': newPassword,
-      },
+      data: {'token': token, 'newPassword': newPassword},
     );
   }
 
@@ -238,8 +298,7 @@ class AuthService {
       if (imageUrl != null) 'imageUrl': imageUrl,
     };
 
-    final response =
-        await ApiClient.instance.post('/reports', data: body);
+    final response = await ApiClient.instance.post('/reports', data: body);
 
     return Map<String, dynamic>.from(response.data ?? {});
   }

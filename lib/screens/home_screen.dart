@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/api_client.dart';
 import '../core/auth_service.dart';
 import '../core/models/user_model.dart';
 import '../presentation/theme/app_colors.dart';
@@ -107,6 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
         index: _currentIndex,
         children: [
           HomeTab(
+            userName: _user?['name'] ?? 'User',
             currentUser: _currentUser,
             isLoading: _loading,
             onToggleTheme: widget.onToggleTheme,

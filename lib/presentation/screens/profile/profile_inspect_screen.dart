@@ -165,7 +165,7 @@ class _ProfileInspectScreenState extends State<ProfileInspectScreen>
         return [
           SliverAppBar(
             pinned: true,
-            expandedHeight: 380,
+            expandedHeight: 500,
             stretch: true,
             backgroundColor: theme.scaffoldBackgroundColor,
             leading: const BackButton(),
@@ -228,153 +228,159 @@ class _ProfileInspectScreenState extends State<ProfileInspectScreen>
 
     return Container(
       decoration: BoxDecoration(color: theme.scaffoldBackgroundColor),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const SizedBox(height: 48), // Space for status bar/AppBar
-          // Avatar
-          Container(
-            padding: const EdgeInsets.all(4),
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [theme.primaryColor, theme.colorScheme.secondary],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: CircleAvatar(
-              radius: 50,
-              backgroundColor: isDark ? Colors.grey[900] : Colors.grey[200],
-              backgroundImage: user.avatarUrl != null
-                  ? NetworkImage(user.avatarUrl!)
-                  : null,
-              child: user.avatarUrl == null
-                  ? Text(
-                      user.name.substring(0, 1).toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 36,
-                        fontWeight: FontWeight.bold,
-                        color: theme.primaryColor,
-                      ),
-                    )
-                  : null,
-            ),
-          ),
-          const SizedBox(height: 16),
-          // Name and Badge
-          Row(
+      child: Center(
+        child: SingleChildScrollView(
+          physics: const NeverScrollableScrollPhysics(),
+          child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Flexible(
-                child: Text(
-                  user.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: theme.textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+              const SizedBox(height: 48), // Space for status bar/AppBar
+              // Avatar
+              Container(
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    colors: [theme.primaryColor, theme.colorScheme.secondary],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
                 ),
-              ),
-              if (user.isVerified) ...[
-                const SizedBox(width: 8),
-                const Icon(Icons.verified, color: Colors.blue, size: 24),
-              ],
-            ],
-          ),
-          if (user.bio != null && user.bio!.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
-              child: Text(
-                user.bio!,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.textTheme.bodySmall?.color,
-                ),
-              ),
-            ),
-          if (_followStatus != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: _buildRelationshipChips(theme),
-            ),
-          const SizedBox(height: 24),
-          // Stats Row
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _buildStatItem(
-                'Artworks',
-                user.publicGenerationsCount,
-                onTap: () => _handleStatTap(0),
-              ),
-              _buildStatItem(
-                'Followers',
-                _followStatus?.followerCount ?? 0,
-                onTap: () => _handleStatTap(1),
-              ),
-              _buildStatItem(
-                'Following',
-                _followStatus?.followingCount ?? 0,
-                onTap: () => _handleStatTap(2),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
-          // Actions
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: SizedBox(
-              width: double.infinity,
-              height: 44,
-              child: ElevatedButton(
-                onPressed: _toggleFollow,
-                style: ElevatedButton.styleFrom(
-                  elevation: 0,
-                  backgroundColor: _followStatus?.isFollowing ?? false
-                      ? theme.colorScheme.primary.withOpacity(0.14)
-                      : theme.colorScheme.primary,
-                  foregroundColor: _followStatus?.isFollowing ?? false
-                      ? theme.colorScheme.primary
-                      : theme.colorScheme.onPrimary,
-                  side: _followStatus?.isFollowing ?? false
-                      ? BorderSide(
-                          color: theme.colorScheme.primary.withOpacity(0.5),
+                child: CircleAvatar(
+                  radius: 50,
+                  backgroundColor: isDark ? Colors.grey[900] : Colors.grey[200],
+                  backgroundImage: user.avatarUrl != null
+                      ? NetworkImage(user.avatarUrl!)
+                      : null,
+                  child: user.avatarUrl == null
+                      ? Text(
+                          user.name.substring(0, 1).toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 36,
+                            fontWeight: FontWeight.bold,
+                            color: theme.primaryColor,
+                          ),
                         )
                       : null,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(22),
+                ),
+              ),
+              const SizedBox(height: 16),
+              // Name and Badge
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Flexible(
+                    child: Text(
+                      user.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  if (user.isVerified) ...[
+                    const SizedBox(width: 8),
+                    const Icon(Icons.verified, color: Colors.blue, size: 24),
+                  ],
+                ],
+              ),
+              if (user.bio != null && user.bio!.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+                  child: Text(
+                    user.bio!,
+                    textAlign: TextAlign.center,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.textTheme.bodySmall?.color,
+                    ),
                   ),
                 ),
-                child: _followStatus?.isFollowing ?? false
-                    ? const Text(
-                        'Following',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      )
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: const [
-                          Icon(Icons.add_rounded, size: 20),
-                          SizedBox(width: 8),
-                          Text(
-                            'Follow',
+              if (_followStatus != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: _buildRelationshipChips(theme),
+                ),
+              const SizedBox(height: 24),
+              // Stats Row
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _buildStatItem(
+                    'Artworks',
+                    user.publicGenerationsCount,
+                    onTap: () => _handleStatTap(0),
+                  ),
+                  _buildStatItem(
+                    'Followers',
+                    _followStatus?.followerCount ?? 0,
+                    onTap: () => _handleStatTap(1),
+                  ),
+                  _buildStatItem(
+                    'Following',
+                    _followStatus?.followingCount ?? 0,
+                    onTap: () => _handleStatTap(2),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              // Actions
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: ElevatedButton(
+                    onPressed: _toggleFollow,
+                    style: ElevatedButton.styleFrom(
+                      elevation: 0,
+                      backgroundColor: _followStatus?.isFollowing ?? false
+                          ? theme.colorScheme.primary.withOpacity(0.14)
+                          : theme.colorScheme.primary,
+                      foregroundColor: _followStatus?.isFollowing ?? false
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.onPrimary,
+                      side: _followStatus?.isFollowing ?? false
+                          ? BorderSide(
+                              color: theme.colorScheme.primary.withOpacity(0.5),
+                            )
+                          : null,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                    ),
+                    child: _followStatus?.isFollowing ?? false
+                        ? const Text(
+                            'Following',
                             style: TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
                             ),
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.add_rounded, size: 20),
+                              SizedBox(width: 8),
+                              Text(
+                                'Follow',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(height: 16),
+              const SizedBox(height: 48), // Space for TabBar
+            ],
           ),
-          const SizedBox(height: 16),
-        ],
+        ),
       ),
     );
   }

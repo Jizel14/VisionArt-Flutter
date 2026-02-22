@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
 import '../../../core/auth_service.dart';
 import '../../../core/api_client.dart';
+import '../../../core/preference_storage.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
+import '../preferences/preferences_screen.dart';
+import '../report/report_screen.dart';
 import '../splash/widgets/smoke_background.dart';
 import '../signature/signature_editor_screen.dart';
 import 'edit_profile_screen.dart';
@@ -352,40 +355,6 @@ class ProfileScreen extends StatelessWidget {
           const SizedBox(height: 12),
           _GlassCard(
             child: ListTile(
-              leading: Icon(Icons.palette_rounded, color: AppColors.primaryBlue),
-              title: Text(
-                'Mes préférences',
-                style: TextStyle(
-                  color: textPrimary,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              subtitle: Text(
-                'Sujets, styles, couleurs, ambiance',
-                style: TextStyle(color: textSecondary, fontSize: 12),
-              ),
-              trailing: Icon(Icons.chevron_right, color: textSecondary),
-              onTap: () async {
-                final prefs = await PreferenceStorage.load();
-                if (!context.mounted) return;
-                Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => PreferencesOnboardingScreen(
-                      authService: authService,
-                      initialPreferences: prefs,
-                      onComplete: () {
-                        Navigator.of(context).pop();
-                        onProfileUpdated?.call();
-                      },
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-          const SizedBox(height: 12),
-          _GlassCard(
-            child: ListTile(
               leading: Icon(Icons.draw_rounded, color: AppColors.nftAccent),
               title: Text(
                 'My signature',
@@ -459,7 +428,10 @@ class ProfileScreen extends StatelessWidget {
           const SizedBox(height: 12),
           _GlassCard(
             child: ListTile(
-              leading: Icon(Icons.flag_rounded, color: AppColors.error.withOpacity(0.8)),
+              leading: Icon(
+                Icons.flag_rounded,
+                color: AppColors.error.withOpacity(0.8),
+              ),
               title: Text(
                 'Signaler un problème',
                 style: TextStyle(
@@ -502,7 +474,8 @@ class ProfileScreen extends StatelessWidget {
           const SizedBox(height: 16),
           // Delete account
           TextButton(
-            onPressed: () => _showDeleteAccountDialog(context, authService, onLogout),
+            onPressed: () =>
+                _showDeleteAccountDialog(context, authService, onLogout),
             child: Text(
               'Supprimer mon compte',
               style: TextStyle(

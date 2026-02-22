@@ -6,7 +6,6 @@ import '../../../core/services/artwork_service.dart';
 import '../../../core/services/follow_service.dart';
 import '../../../core/models/artwork_model.dart';
 import '../../../core/models/user_model.dart';
-import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
 import '../splash/widgets/smoke_background.dart';
 import 'post_detail_screen.dart';
@@ -86,14 +85,37 @@ class _HomeTabState extends State<HomeTab> {
     }
   }
 
-  Future<void> _toggleFollow(String userId) async {
+  Future<void> _toggleFollow(int artworkIndex) async {
+    final artwork = _artworks[artworkIndex];
+    final userId = artwork.user.id;
+    final isCurrentlyFollowing = artwork.isFollowedByMe;
+
     try {
-      await _followService.followUser(userId);
+      if (isCurrentlyFollowing) {
+        await _followService.unfollowUser(userId);
+      } else {
+        await _followService.followUser(userId);
+      }
+
       if (mounted) {
+        // Update the follow status for ALL artworks from this user in the feed
+        setState(() {
+          _artworks = _artworks.map((a) {
+            if (a.user.id == userId) {
+              return a.copyWith(isFollowedByMe: !isCurrentlyFollowing);
+            }
+            return a;
+          }).toList();
+        });
+
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Followed successfully'),
-            duration: Duration(seconds: 1),
+          SnackBar(
+            content: Text(
+              isCurrentlyFollowing
+                  ? 'Unfollowed successfully'
+                  : 'Followed successfully',
+            ),
+            duration: const Duration(seconds: 1),
           ),
         );
       }
@@ -120,9 +142,7 @@ class _HomeTabState extends State<HomeTab> {
                           Expanded(
                             child: Text(
                               'Welcome, ${widget.userName}',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .headlineMedium
+                              style: Theme.of(context).textTheme.headlineMedium
                                   ?.copyWith(
                                     color: textPrimary,
                                     fontWeight: FontWeight.w700,
@@ -174,27 +194,30 @@ class _HomeTabState extends State<HomeTab> {
                                     ? const Padding(
                                         padding: EdgeInsets.all(24),
                                         child: Center(
-                                          child:
-                                              CircularProgressIndicator(),
+                                          child: CircularProgressIndicator(),
                                         ),
                                       )
                                     : const SizedBox();
                               }
 
                               final artwork = _artworks[index];
+                              final isOwnPost =
+                                  widget.currentUser != null &&
+                                  widget.currentUser!.id == artwork.user.id;
 
                               return AnimationConfiguration.staggeredList(
                                 position: index,
-                                duration:
-                                    const Duration(milliseconds: 400),
+                                duration: const Duration(milliseconds: 400),
                                 child: SlideAnimation(
                                   verticalOffset: 30,
                                   child: FadeInAnimation(
                                     child: Padding(
-                                      padding:
-                                          const EdgeInsets.only(bottom: 20),
+                                      padding: const EdgeInsets.only(
+                                        bottom: 20,
+                                      ),
                                       child: _FeedCard(
                                         artwork: artwork,
+                                        isOwnPost: isOwnPost,
                                         textPrimary: textPrimary,
                                         textSecondary: textSecondary,
                                         onTapAuthor: () {
@@ -203,9 +226,9 @@ class _HomeTabState extends State<HomeTab> {
                                             MaterialPageRoute(
                                               builder: (_) =>
                                                   ProfileInspectScreen(
-                                                userId: artwork.user.id,
-                                                initialUser: artwork.user,
-                                              ),
+                                                    userId: artwork.user.id,
+                                                    initialUser: artwork.user,
+                                                  ),
                                             ),
                                           );
                                         },
@@ -217,26 +240,21 @@ class _HomeTabState extends State<HomeTab> {
                                                 author: artwork.user.name,
                                                 avatarEmoji:
                                                     artwork.user.avatarUrl ??
-                                                        '🎨',
+                                                    '\u{1F3A8}',
                                                 quote:
                                                     artwork.description ?? '',
-                                                imageUrl:
-                                                    artwork.imageUrl,
-                                                imageColor:
-                                                    Colors.purple,
-                                                likes:
-                                                    artwork.likesCount,
-                                                comments:
-                                                    artwork.commentsCount,
+                                                imageUrl: artwork.imageUrl,
+                                                imageColor: Colors.purple,
+                                                likes: artwork.likesCount,
+                                                comments: artwork.commentsCount,
                                                 time: _formatTime(
-                                                    artwork.createdAt),
+                                                  artwork.createdAt,
+                                                ),
                                               ),
                                             ),
                                           );
                                         },
-                                        onTapFollow: () =>
-                                            _toggleFollow(
-                                                artwork.user.id),
+                                        onTapFollow: () => _toggleFollow(index),
                                       ),
                                     ),
                                   ),
@@ -244,14 +262,12 @@ class _HomeTabState extends State<HomeTab> {
                               );
                             },
                             childCount:
-                                _artworks.length +
-                                    (_isLoadingFeed ? 1 : 0),
+                                _artworks.length + (_isLoadingFeed ? 1 : 0),
                           ),
                         ),
                       ),
                     ),
-                  const SliverToBoxAdapter(
-                      child: SizedBox(height: 100)),
+                  const SliverToBoxAdapter(child: SizedBox(height: 100)),
                 ],
               ),
       ),
@@ -295,6 +311,7 @@ class _HomeTabState extends State<HomeTab> {
 class _FeedCard extends StatefulWidget {
   const _FeedCard({
     required this.artwork,
+    required this.isOwnPost,
     required this.textPrimary,
     required this.textSecondary,
     required this.onTapAuthor,
@@ -303,6 +320,7 @@ class _FeedCard extends StatefulWidget {
   });
 
   final ArtworkModel artwork;
+  final bool isOwnPost;
   final Color textPrimary;
   final Color textSecondary;
   final VoidCallback onTapAuthor;
@@ -314,16 +332,10 @@ class _FeedCard extends StatefulWidget {
 }
 
 class _FeedCardState extends State<_FeedCard> {
-  late bool _isLiked;
-
-  @override
-  void initState() {
-    super.initState();
-    _isLiked = widget.artwork.isLikedByMe;
-  }
-
   @override
   Widget build(BuildContext context) {
+    final isFollowing = widget.artwork.isFollowedByMe;
+
     return GestureDetector(
       onTap: widget.onTapCard,
       child: Container(
@@ -333,30 +345,79 @@ class _FeedCardState extends State<_FeedCard> {
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 GestureDetector(
                   onTap: widget.onTapAuthor,
-                  child: CircleAvatar(
-                    backgroundImage:
-                        widget.artwork.user.avatarUrl != null
-                            ? NetworkImage(
-                                widget.artwork.user.avatarUrl!)
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundImage: widget.artwork.user.avatarUrl != null
+                            ? NetworkImage(widget.artwork.user.avatarUrl!)
                             : null,
+                        child: widget.artwork.user.avatarUrl == null
+                            ? Text(
+                                widget.artwork.user.name.isNotEmpty
+                                    ? widget.artwork.user.name[0].toUpperCase()
+                                    : '?',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              )
+                            : null,
+                      ),
+                      const SizedBox(width: 10),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.artwork.user.name,
+                            style: TextStyle(
+                              color: widget.textPrimary,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 14,
+                            ),
+                          ),
+                          if (widget.artwork.title != null &&
+                              widget.artwork.title!.isNotEmpty)
+                            Text(
+                              widget.artwork.title!,
+                              style: TextStyle(
+                                color: widget.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
                 const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.person_add),
-                  onPressed: widget.onTapFollow,
-                ),
+                if (!widget.isOwnPost)
+                  IconButton(
+                    icon: Icon(
+                      isFollowing
+                          ? Icons.how_to_reg_rounded
+                          : Icons.person_add_rounded,
+                      color: isFollowing
+                          ? Colors.greenAccent
+                          : widget.textSecondary,
+                    ),
+                    tooltip: isFollowing ? 'Following' : 'Follow',
+                    onPressed: widget.onTapFollow,
+                  ),
               ],
             ),
             const SizedBox(height: 12),
-            CachedNetworkImage(
-              imageUrl: widget.artwork.imageUrl,
-              fit: BoxFit.cover,
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: CachedNetworkImage(
+                imageUrl: widget.artwork.imageUrl,
+                fit: BoxFit.cover,
+                width: double.infinity,
+              ),
             ),
           ],
         ),
