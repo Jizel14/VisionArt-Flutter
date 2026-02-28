@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/models/follow_model.dart';
 import '../../../core/services/follow_service.dart';
-import '../../../core/services/artwork_service.dart';
 import 'user_gallery_screen.dart';
 
 class ProfileInspectScreen extends StatefulWidget {
@@ -20,7 +19,6 @@ class _ProfileInspectScreenState extends State<ProfileInspectScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   late FollowService _followService;
-  late ArtworkService _artworkService;
 
   UserModel? _user;
   FollowStatusModel? _followStatus;
@@ -34,8 +32,8 @@ class _ProfileInspectScreenState extends State<ProfileInspectScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(_handleTabChange);
     _followService = FollowService();
-    _artworkService = ArtworkService();
 
     if (widget.initialUser != null) {
       _user = widget.initialUser;
@@ -46,8 +44,19 @@ class _ProfileInspectScreenState extends State<ProfileInspectScreen>
 
   @override
   void dispose() {
+    _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _handleTabChange() {
+    if (_tabController.indexIsChanging) return;
+
+    if (_tabController.index == 1) {
+      _loadFollowers();
+    } else if (_tabController.index == 2) {
+      _loadFollowing();
+    }
   }
 
   Future<void> _loadProfileData() async {
@@ -186,6 +195,13 @@ class _ProfileInspectScreenState extends State<ProfileInspectScreen>
                     .scaffoldBackgroundColor, // Ensure tab bar has background when pinned
                 child: TabBar(
                   controller: _tabController,
+                  onTap: (index) {
+                    if (index == 1) {
+                      _loadFollowers();
+                    } else if (index == 2) {
+                      _loadFollowing();
+                    }
+                  },
                   labelColor: theme.colorScheme.onSurface,
                   unselectedLabelColor: theme.colorScheme.onSurface.withOpacity(
                     0.6,
