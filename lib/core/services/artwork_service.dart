@@ -5,6 +5,14 @@ import '../api_client.dart';
 class ArtworkService {
   late final Dio _dio = ApiClient.instance;
 
+  static const List<String> reportReasons = <String>[
+    'inappropriate',
+    'copyright',
+    'nsfw',
+    'spam',
+    'other',
+  ];
+
   /// Get artwork by ID
   Future<ArtworkModel> getArtwork(String artworkId) async {
     try {
@@ -114,6 +122,123 @@ class ArtworkService {
     } catch (e) {
       rethrow;
     }
+  }
+
+  Future<int> likeArtwork(String artworkId) async {
+    try {
+      final response = await _dio.post('/social/artworks/$artworkId/like');
+      final data = response.data as Map<String, dynamic>;
+      return _toInt(data['likesCount']);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<int> unlikeArtwork(String artworkId) async {
+    try {
+      final response = await _dio.delete('/social/artworks/$artworkId/like');
+      final data = response.data as Map<String, dynamic>;
+      return _toInt(data['likesCount']);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<List<ArtworkCommentItem>> getArtworkComments(
+    String artworkId, {
+    int page = 1,
+    int limit = 20,
+  }) async {
+    try {
+      final response = await _dio.get(
+        '/social/artworks/$artworkId/comments',
+        queryParameters: {'page': page, 'limit': limit},
+      );
+
+      final payload = response.data as Map<String, dynamic>;
+      final comments = (payload['data'] as List<dynamic>? ?? <dynamic>[])
+          .map(
+            (item) => ArtworkCommentItem.fromJson(item as Map<String, dynamic>),
+          )
+          .toList();
+
+      return comments;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<ArtworkCommentItem> createArtworkComment(
+    String artworkId,
+    String content,
+  ) async {
+    try {
+      final response = await _dio.post(
+        '/social/artworks/$artworkId/comments',
+        data: {'content': content},
+      );
+
+      return ArtworkCommentItem.fromJson(response.data as Map<String, dynamic>);
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Future<void> reportArtwork({
+    required String artworkId,
+    required String reason,
+    String? details,
+  }) async {
+    if (!reportReasons.contains(reason)) {
+      throw ApiException(400, 'Invalid report reason');
+    }
+
+    await _dio.post(
+      '/social/artworks/$artworkId/report',
+      data: {
+        'reason': reason,
+        if (details != null && details.trim().isNotEmpty)
+          'details': details.trim(),
+      },
+    );
+  }
+
+  int _toInt(dynamic value) {
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value) ?? 0;
+    return 0;
+  }
+}
+
+class ArtworkCommentItem {
+  const ArtworkCommentItem({
+    required this.id,
+    required this.userId,
+    required this.userName,
+    this.userAvatarUrl,
+    required this.content,
+    required this.createdAt,
+  });
+
+  final String id;
+  final String userId;
+  final String userName;
+  final String? userAvatarUrl;
+  final String content;
+  final DateTime createdAt;
+
+  factory ArtworkCommentItem.fromJson(Map<String, dynamic> json) {
+    final user = json['user'] as Map<String, dynamic>? ?? <String, dynamic>{};
+    return ArtworkCommentItem(
+      id: (json['id'] ?? '').toString(),
+      userId: (user['id'] ?? '').toString(),
+      userName: (user['name'] ?? 'Unknown').toString(),
+      userAvatarUrl: user['avatarUrl']?.toString(),
+      content: (json['content'] ?? '').toString(),
+      createdAt:
+          DateTime.tryParse((json['createdAt'] ?? '').toString()) ??
+          DateTime.now(),
+    );
   }
 }
 
