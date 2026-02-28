@@ -203,10 +203,69 @@ class ArtworkService {
     );
   }
 
+  Future<void> saveArtwork(
+    String artworkId, {
+    String collectionName = 'Favorites',
+  }) async {
+    await _dio.post(
+      '/social/artworks/$artworkId/save',
+      data: {'collectionName': collectionName},
+    );
+  }
+
+  Future<void> unsaveArtwork(String artworkId) async {
+    await _dio.delete('/social/artworks/$artworkId/save');
+  }
+
+  Future<List<CollectionSummary>> getCollections() async {
+    final response = await _dio.get('/social/collections');
+    final payload = response.data as Map<String, dynamic>;
+    return (payload['data'] as List<dynamic>? ?? const <dynamic>[])
+        .map((item) => CollectionSummary.fromJson(item as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<PaginatedArtworks> getSavedArtworks({
+    String? collectionName,
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final response = await _dio.get(
+      '/social/collections/artworks',
+      queryParameters: {
+        'page': page,
+        'limit': limit,
+        if (collectionName != null && collectionName.trim().isNotEmpty)
+          'collectionName': collectionName.trim(),
+      },
+    );
+
+    return PaginatedArtworks.fromJson(response.data as Map<String, dynamic>);
+  }
+
   int _toInt(dynamic value) {
     if (value is int) return value;
     if (value is String) return int.tryParse(value) ?? 0;
     return 0;
+  }
+}
+
+class CollectionSummary {
+  const CollectionSummary({required this.name, required this.itemsCount});
+
+  final String name;
+  final int itemsCount;
+
+  factory CollectionSummary.fromJson(Map<String, dynamic> json) {
+    final rawCount = json['itemsCount'];
+    final count = rawCount is int
+        ? rawCount
+        : int.tryParse(rawCount?.toString() ?? '0') ?? 0;
+
+    return CollectionSummary(
+      name: (json['name'] ?? 'Favorites').toString(),
+      itemsCount: count,
+    );
   }
 }
 

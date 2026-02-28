@@ -4,11 +4,14 @@ import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/services/artwork_service.dart';
 import '../../../core/services/follow_service.dart';
+import '../../../core/services/notifications_service.dart';
 import '../../../core/models/artwork_model.dart';
 import '../../../core/models/user_model.dart';
 import '../../theme/theme_extensions.dart';
 import '../splash/widgets/smoke_background.dart';
 import 'post_detail_screen.dart';
+import 'notifications_screen.dart';
+import 'saved_collections_screen.dart';
 import '../profile/profile_inspect_screen.dart';
 
 class HomeTab extends StatefulWidget {
@@ -32,21 +35,25 @@ class HomeTab extends StatefulWidget {
 class _HomeTabState extends State<HomeTab> {
   late ArtworkService _artworkService;
   late FollowService _followService;
+  late NotificationsService _notificationsService;
   late ScrollController _scrollController;
 
   List<ArtworkModel> _artworks = [];
   bool _isLoadingFeed = false;
   bool _hasMore = true;
   int _currentPage = 1;
+  int _unreadNotificationsCount = 0;
 
   @override
   void initState() {
     super.initState();
     _artworkService = ArtworkService();
     _followService = FollowService();
+    _notificationsService = NotificationsService();
     _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
     _loadFeed();
+    _loadUnreadNotifications();
   }
 
   @override
@@ -83,6 +90,39 @@ class _HomeTabState extends State<HomeTab> {
     } catch (_) {
       setState(() => _isLoadingFeed = false);
     }
+  }
+
+  Future<void> _refreshFeed() async {
+    setState(() {
+      _artworks = [];
+      _currentPage = 1;
+      _hasMore = true;
+    });
+    await _loadFeed();
+  }
+
+  Future<void> _loadUnreadNotifications() async {
+    try {
+      final count = await _notificationsService.getUnreadCount();
+      if (!mounted) return;
+      setState(() => _unreadNotificationsCount = count);
+    } catch (_) {}
+  }
+
+  Future<void> _openNotifications() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+    );
+    _loadUnreadNotifications();
+  }
+
+  Future<void> _openSavedCollections() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SavedCollectionsScreen()),
+    );
+    _refreshFeed();
   }
 
   Future<void> _toggleFollow(int artworkIndex) async {
@@ -156,6 +196,38 @@ class _HomeTabState extends State<HomeTab> {
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Failed to update like. Please retry.')),
+      );
+    }
+  }
+
+  Future<void> _toggleSave(int artworkIndex) async {
+    final artwork = _artworks[artworkIndex];
+    final wasSaved = artwork.isSavedByMe;
+
+    setState(() {
+      _artworks[artworkIndex] = artwork.copyWith(isSavedByMe: !wasSaved);
+    });
+
+    try {
+      if (wasSaved) {
+        await _artworkService.unsaveArtwork(artwork.id);
+      } else {
+        await _artworkService.saveArtwork(
+          artwork.id,
+          collectionName: 'Favorites',
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _artworks[artworkIndex] = artwork;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            wasSaved ? 'Failed to remove from saved' : 'Failed to save artwork',
+          ),
+        ),
       );
     }
   }
@@ -544,6 +616,50 @@ class _HomeTabState extends State<HomeTab> {
                             ),
                           ),
                           IconButton(
+                            onPressed: _openSavedCollections,
+                            icon: Icon(
+                              Icons.bookmark_rounded,
+                              color: textPrimary,
+                            ),
+                          ),
+                          Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              IconButton(
+                                onPressed: _openNotifications,
+                                icon: Icon(
+                                  Icons.notifications_rounded,
+                                  color: textPrimary,
+                                ),
+                              ),
+                              if (_unreadNotificationsCount > 0)
+                                Positioned(
+                                  right: 6,
+                                  top: 8,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 5,
+                                      vertical: 1,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.redAccent,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      _unreadNotificationsCount > 99
+                                          ? '99+'
+                                          : '$_unreadNotificationsCount',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          IconButton(
                             onPressed: widget.onToggleTheme,
                             icon: Icon(
                               context.isDark
@@ -650,6 +766,7 @@ class _HomeTabState extends State<HomeTab> {
                                         },
                                         onTapFollow: () => _toggleFollow(index),
                                         onTapLike: () => _toggleLike(index),
+                                        onTapSave: () => _toggleSave(index),
                                         onTapComments: () =>
                                             _openComments(index),
                                         onTapReport: () => _openReport(index),
@@ -716,6 +833,7 @@ class _FeedCard extends StatefulWidget {
     required this.onTapCard,
     required this.onTapFollow,
     required this.onTapLike,
+    required this.onTapSave,
     required this.onTapComments,
     required this.onTapReport,
   });
@@ -728,6 +846,7 @@ class _FeedCard extends StatefulWidget {
   final VoidCallback onTapCard;
   final VoidCallback onTapFollow;
   final VoidCallback onTapLike;
+  final VoidCallback onTapSave;
   final VoidCallback onTapComments;
   final VoidCallback onTapReport;
 
@@ -740,6 +859,7 @@ class _FeedCardState extends State<_FeedCard> {
   Widget build(BuildContext context) {
     final isFollowing = widget.artwork.isFollowedByMe;
     final isLiked = widget.artwork.isLikedByMe;
+    final isSaved = widget.artwork.isSavedByMe;
 
     return GestureDetector(
       onTap: widget.onTapCard,
@@ -841,6 +961,15 @@ class _FeedCardState extends State<_FeedCard> {
                   label: _formatCompactCount(widget.artwork.commentsCount),
                   color: widget.textSecondary,
                   onTap: widget.onTapComments,
+                ),
+                const SizedBox(width: 12),
+                _FooterAction(
+                  icon: isSaved
+                      ? Icons.bookmark_rounded
+                      : Icons.bookmark_outline_rounded,
+                  label: isSaved ? 'Saved' : 'Save',
+                  color: isSaved ? Colors.amberAccent : widget.textSecondary,
+                  onTap: widget.onTapSave,
                 ),
                 const Spacer(),
                 IconButton(
