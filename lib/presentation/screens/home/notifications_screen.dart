@@ -96,6 +96,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     } catch (_) {}
   }
 
+  Future<void> _openNotification(AppNotificationItem item) async {
+    await _markOneAsRead(item);
+
+    if (!mounted) return;
+    if (item.artworkId == null || item.artworkId!.isEmpty) return;
+
+    Navigator.pop(context, item.artworkId);
+  }
+
   @override
   Widget build(BuildContext context) {
     final textPrimary = context.textPrimaryColor;
@@ -198,7 +207,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           itemBuilder: (_, index) {
                             final item = _items[index];
                             return InkWell(
-                              onTap: () => _markOneAsRead(item),
+                              onTap: () => _openNotification(item),
                               borderRadius: BorderRadius.circular(14),
                               child: Container(
                                 padding: const EdgeInsets.all(12),

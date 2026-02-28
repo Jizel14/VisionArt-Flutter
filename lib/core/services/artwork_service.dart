@@ -170,18 +170,44 @@ class ArtworkService {
 
   Future<ArtworkCommentItem> createArtworkComment(
     String artworkId,
-    String content,
-  ) async {
+    String content, {
+    String? parentCommentId,
+    List<String> mentionedUserIds = const <String>[],
+  }) async {
     try {
       final response = await _dio.post(
         '/social/artworks/$artworkId/comments',
-        data: {'content': content},
+        data: {
+          'content': content,
+          if (parentCommentId != null && parentCommentId.trim().isNotEmpty)
+            'parentCommentId': parentCommentId.trim(),
+          if (mentionedUserIds.isNotEmpty) 'mentionedUserIds': mentionedUserIds,
+        },
       );
 
       return ArtworkCommentItem.fromJson(response.data as Map<String, dynamic>);
     } catch (e) {
       rethrow;
     }
+  }
+
+  Future<List<MentionUserItem>> searchMentionUsers(
+    String query, {
+    int limit = 8,
+  }) async {
+    if (query.trim().isEmpty) {
+      return const <MentionUserItem>[];
+    }
+
+    final response = await _dio.get(
+      '/social/artworks/mentions/users',
+      queryParameters: {'q': query.trim(), 'limit': limit},
+    );
+
+    final payload = response.data as Map<String, dynamic>;
+    return (payload['data'] as List<dynamic>? ?? const <dynamic>[])
+        .map((item) => MentionUserItem.fromJson(item as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> reportArtwork({
@@ -277,6 +303,9 @@ class ArtworkCommentItem {
     this.userAvatarUrl,
     required this.content,
     required this.createdAt,
+    this.parentCommentId,
+    this.isEdited = false,
+    this.replies = const <ArtworkCommentItem>[],
   });
 
   final String id;
@@ -285,9 +314,14 @@ class ArtworkCommentItem {
   final String? userAvatarUrl;
   final String content;
   final DateTime createdAt;
+  final String? parentCommentId;
+  final bool isEdited;
+  final List<ArtworkCommentItem> replies;
 
   factory ArtworkCommentItem.fromJson(Map<String, dynamic> json) {
     final user = json['user'] as Map<String, dynamic>? ?? <String, dynamic>{};
+    final rawReplies = json['replies'] as List<dynamic>? ?? const <dynamic>[];
+
     return ArtworkCommentItem(
       id: (json['id'] ?? '').toString(),
       userId: (user['id'] ?? '').toString(),
@@ -297,6 +331,29 @@ class ArtworkCommentItem {
       createdAt:
           DateTime.tryParse((json['createdAt'] ?? '').toString()) ??
           DateTime.now(),
+      parentCommentId: json['parentCommentId']?.toString(),
+      isEdited: json['isEdited'] as bool? ?? false,
+      replies: rawReplies
+          .map(
+            (item) => ArtworkCommentItem.fromJson(item as Map<String, dynamic>),
+          )
+          .toList(),
+    );
+  }
+}
+
+class MentionUserItem {
+  const MentionUserItem({required this.id, required this.name, this.avatarUrl});
+
+  final String id;
+  final String name;
+  final String? avatarUrl;
+
+  factory MentionUserItem.fromJson(Map<String, dynamic> json) {
+    return MentionUserItem(
+      id: (json['id'] ?? '').toString(),
+      name: (json['name'] ?? '').toString(),
+      avatarUrl: json['avatarUrl']?.toString(),
     );
   }
 }
