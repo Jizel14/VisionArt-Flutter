@@ -9,6 +9,9 @@ class AuthService {
   SharedPreferences? _prefs;
   static const _keyToken = 'auth_token';
 
+  /// The currently authenticated user's ID (set on login / profile fetch).
+  static String? currentUserId;
+
   Future<SharedPreferences> get prefs async =>
       _prefs ??= await SharedPreferences.getInstance();
 
@@ -52,10 +55,10 @@ class AuthService {
 
     await _saveToken(token);
 
-    return AuthResult(
-      token: token,
-      user: Map<String, dynamic>.from(response.data['user'] ?? {}),
-    );
+    final user = Map<String, dynamic>.from(response.data['user'] ?? {});
+    currentUserId = user['id'] as String?;
+
+    return AuthResult(token: token, user: user);
   }
 
   Future<AuthResult> register(
@@ -73,10 +76,10 @@ class AuthService {
 
     await _saveToken(token);
 
-    return AuthResult(
-      token: token,
-      user: Map<String, dynamic>.from(response.data['user'] ?? {}),
-    );
+    final user = Map<String, dynamic>.from(response.data['user'] ?? {});
+    currentUserId = user['id'] as String?;
+
+    return AuthResult(token: token, user: user);
   }
 
   Future<AuthResult> loginWithGoogle(String idToken) async {
@@ -90,10 +93,10 @@ class AuthService {
 
     await _saveToken(token);
 
-    return AuthResult(
-      token: token,
-      user: Map<String, dynamic>.from(response.data['user'] ?? {}),
-    );
+    final user = Map<String, dynamic>.from(response.data['user'] ?? {});
+    currentUserId = user['id'] as String?;
+
+    return AuthResult(token: token, user: user);
   }
 
   // =========================
@@ -106,7 +109,9 @@ class AuthService {
 
     try {
       final response = await ApiClient.instance.get('/auth/me');
-      return Map<String, dynamic>.from(response.data ?? {});
+      final data = Map<String, dynamic>.from(response.data ?? {});
+      currentUserId = data['id'] as String?;
+      return data;
     } on DioException catch (e) {
       if (e.response?.statusCode == 401) {
         await clearToken();
@@ -274,6 +279,7 @@ class AuthService {
 
   Future<void> logout() async {
     await clearToken();
+    currentUserId = null;
   }
 
   // =========================
