@@ -1,15 +1,22 @@
 import 'package:flutter/material.dart';
+import '../../../core/auth_service.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/models/follow_model.dart';
 import '../../../core/services/follow_service.dart';
+import '../../widgets/social_share_sheet.dart';
 import 'user_gallery_screen.dart';
 
 class ProfileInspectScreen extends StatefulWidget {
   final String userId;
   final UserModel? initialUser;
+  final int initialTabIndex;
 
-  const ProfileInspectScreen({Key? key, required this.userId, this.initialUser})
-    : super(key: key);
+  const ProfileInspectScreen({
+    Key? key,
+    required this.userId,
+    this.initialUser,
+    this.initialTabIndex = 0,
+  }) : super(key: key);
 
   @override
   State<ProfileInspectScreen> createState() => _ProfileInspectScreenState();
@@ -28,10 +35,19 @@ class _ProfileInspectScreenState extends State<ProfileInspectScreen>
   bool _isLoadingFollowers = false;
   bool _isLoadingFollowing = false;
 
+  /// Whether the inspected profile belongs to the current user.
+  bool get _isOwnProfile =>
+      AuthService.currentUserId != null &&
+      AuthService.currentUserId == widget.userId;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: widget.initialTabIndex.clamp(0, 2),
+    );
     _tabController.addListener(_handleTabChange);
     _followService = FollowService();
 
@@ -40,6 +56,12 @@ class _ProfileInspectScreenState extends State<ProfileInspectScreen>
     }
 
     _loadProfileData();
+
+    if (_tabController.index == 1) {
+      _loadFollowers();
+    } else if (_tabController.index == 2) {
+      _loadFollowing();
+    }
   }
 
   @override
@@ -60,6 +82,11 @@ class _ProfileInspectScreenState extends State<ProfileInspectScreen>
   }
 
   Future<void> _loadProfileData() async {
+    if (_isOwnProfile) {
+      // No need to fetch follow status for our own profile.
+      setState(() => _isLoading = false);
+      return;
+    }
     try {
       final status = await _followService.getFollowStatus(widget.userId);
       setState(() {
@@ -89,6 +116,25 @@ class _ProfileInspectScreenState extends State<ProfileInspectScreen>
         context,
       ).showSnackBar(SnackBar(content: Text('Error: $e')));
     }
+  }
+
+  // ──────────────────────────────────────────────────────────
+  // Social Share Sheet
+  // ──────────────────────────────────────────────────────────
+
+  String _profileLink(UserModel user) =>
+      'https://visionart.app/users/${user.id}';
+
+  void _showShareProfileSheet(UserModel user) {
+    final link = _profileLink(user);
+    final caption = 'Check out ${user.name} on VisionArt!\n$link';
+
+    showSocialShareSheet(
+      context: context,
+      link: link,
+      caption: caption,
+      subject: '${user.name} on VisionArt',
+    );
   }
 
   Future<void> _loadFollowers() async {
@@ -215,10 +261,12 @@ class _ProfileInspectScreenState extends State<ProfileInspectScreen>
                   tabs: [
                     Tab(text: 'Gallery (${user.publicGenerationsCount})'),
                     Tab(
-                      text: 'Followers (${_followStatus?.followerCount ?? 0})',
+                      text:
+                          'Followers (${_isOwnProfile ? user.followersCount : (_followStatus?.followerCount ?? 0)})',
                     ),
                     Tab(
-                      text: 'Following (${_followStatus?.followingCount ?? 0})',
+                      text:
+                          'Following (${_isOwnProfile ? user.followingCount : (_followStatus?.followingCount ?? 0)})',
                     ),
                   ],
                 ),
@@ -314,10 +362,36 @@ class _ProfileInspectScreenState extends State<ProfileInspectScreen>
                     ),
                   ),
                 ),
-              if (_followStatus != null)
+              // Relationship chips – only for other users
+              if (!_isOwnProfile && _followStatus != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 12),
                   child: _buildRelationshipChips(theme),
+                ),
+              // Own profile badge
+              if (_isOwnProfile)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Chip(
+                    avatar: Icon(
+                      Icons.person,
+                      size: 16,
+                      color: theme.colorScheme.primary,
+                    ),
+                    label: Text(
+                      'Your profile',
+                      style: TextStyle(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    backgroundColor: theme.colorScheme.primary.withOpacity(
+                      0.12,
+                    ),
+                    side: BorderSide(
+                      color: theme.colorScheme.primary.withOpacity(0.4),
+                    ),
+                  ),
                 ),
               const SizedBox(height: 24),
               // Stats Row
@@ -331,67 +405,130 @@ class _ProfileInspectScreenState extends State<ProfileInspectScreen>
                   ),
                   _buildStatItem(
                     'Followers',
-                    _followStatus?.followerCount ?? 0,
+                    _isOwnProfile
+                        ? user.followersCount
+                        : (_followStatus?.followerCount ?? 0),
                     onTap: () => _handleStatTap(1),
                   ),
                   _buildStatItem(
                     'Following',
-                    _followStatus?.followingCount ?? 0,
+                    _isOwnProfile
+                        ? user.followingCount
+                        : (_followStatus?.followingCount ?? 0),
                     onTap: () => _handleStatTap(2),
                   ),
                 ],
               ),
               const SizedBox(height: 24),
-              // Actions
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 44,
-                  child: ElevatedButton(
-                    onPressed: _toggleFollow,
-                    style: ElevatedButton.styleFrom(
-                      elevation: 0,
-                      backgroundColor: _followStatus?.isFollowing ?? false
-                          ? theme.colorScheme.primary.withOpacity(0.14)
-                          : theme.colorScheme.primary,
-                      foregroundColor: _followStatus?.isFollowing ?? false
-                          ? theme.colorScheme.primary
-                          : theme.colorScheme.onPrimary,
-                      side: _followStatus?.isFollowing ?? false
-                          ? BorderSide(
-                              color: theme.colorScheme.primary.withOpacity(0.5),
-                            )
-                          : null,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                    ),
-                    child: _followStatus?.isFollowing ?? false
-                        ? const Text(
-                            'Following',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          )
-                        : Row(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: const [
-                              Icon(Icons.add_rounded, size: 20),
-                              SizedBox(width: 8),
-                              Text(
-                                'Follow',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                ),
+              // Action buttons
+              if (!_isOwnProfile)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: SizedBox(
+                          height: 44,
+                          child: ElevatedButton(
+                            onPressed: _toggleFollow,
+                            style: ElevatedButton.styleFrom(
+                              elevation: 0,
+                              backgroundColor:
+                                  _followStatus?.isFollowing ?? false
+                                  ? theme.colorScheme.primary.withOpacity(0.14)
+                                  : theme.colorScheme.primary,
+                              foregroundColor:
+                                  _followStatus?.isFollowing ?? false
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.onPrimary,
+                              side: _followStatus?.isFollowing ?? false
+                                  ? BorderSide(
+                                      color: theme.colorScheme.primary
+                                          .withOpacity(0.5),
+                                    )
+                                  : null,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(22),
                               ),
-                            ],
+                            ),
+                            child: _followStatus?.isFollowing ?? false
+                                ? const Text(
+                                    'Following',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  )
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: const [
+                                      Icon(Icons.add_rounded, size: 20),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Follow',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                           ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        height: 44,
+                        width: 44,
+                        child: OutlinedButton(
+                          onPressed: () => _showShareProfileSheet(user),
+                          style: OutlinedButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            side: BorderSide(
+                              color: theme.colorScheme.primary.withOpacity(0.5),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(22),
+                            ),
+                          ),
+                          child: Icon(
+                            Icons.share_rounded,
+                            size: 20,
+                            color: theme.colorScheme.primary,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ),
+              if (_isOwnProfile)
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: SizedBox(
+                    width: double.infinity,
+                    height: 44,
+                    child: OutlinedButton.icon(
+                      onPressed: () => _showShareProfileSheet(user),
+                      icon: const Icon(Icons.share_rounded, size: 20),
+                      label: const Text(
+                        'Share profile',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: theme.colorScheme.primary,
+                        side: BorderSide(
+                          color: theme.colorScheme.primary.withOpacity(0.5),
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(22),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               const SizedBox(height: 16),
               const SizedBox(height: 48), // Space for TabBar
             ],
