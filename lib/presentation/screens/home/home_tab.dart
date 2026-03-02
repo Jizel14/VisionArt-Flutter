@@ -9,8 +9,8 @@ import '../../../core/models/artwork_model.dart';
 import '../../../core/models/user_model.dart';
 import '../../theme/theme_extensions.dart';
 import '../splash/widgets/smoke_background.dart';
-import 'post_detail_screen.dart';
 import 'notifications_screen.dart';
+import '../profile/artwork_detail_screen.dart';
 import 'saved_collections_screen.dart';
 import '../profile/profile_inspect_screen.dart';
 
@@ -1118,22 +1118,11 @@ class _HomeTabState extends State<HomeTab> {
                                         onTapCard: () {
                                           Navigator.push(
                                             context,
-                                            PostDetailScreen.route(
-                                              PostDetailScreen(
-                                                author: artwork.user.name,
-                                                avatarEmoji:
-                                                    artwork.user.avatarUrl ??
-                                                    '\u{1F3A8}',
-                                                quote:
-                                                    artwork.description ?? '',
-                                                imageUrl: artwork.imageUrl,
-                                                imageColor: Colors.purple,
-                                                likes: artwork.likesCount,
-                                                comments: artwork.commentsCount,
-                                                time: _formatTime(
-                                                  artwork.createdAt,
-                                                ),
-                                              ),
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  ArtworkDetailScreen(
+                                                    artwork: artwork,
+                                                  ),
                                             ),
                                           );
                                         },
@@ -1181,18 +1170,6 @@ class _HomeTabState extends State<HomeTab> {
         ),
       ),
     );
-  }
-
-  String _formatTime(DateTime dateTime) {
-    final difference = DateTime.now().difference(dateTime);
-
-    if (difference.inMinutes < 60) {
-      return '${difference.inMinutes}m ago';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours}h ago';
-    } else {
-      return '${difference.inDays}d ago';
-    }
   }
 }
 
@@ -1311,10 +1288,13 @@ class _FeedCardState extends State<_FeedCard> {
             const SizedBox(height: 12),
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: CachedNetworkImage(
-                imageUrl: widget.artwork.imageUrl,
-                fit: BoxFit.cover,
-                width: double.infinity,
+              child: Hero(
+                tag: 'artwork_image_${widget.artwork.id}',
+                child: CachedNetworkImage(
+                  imageUrl: widget.artwork.imageUrl,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                ),
               ),
             ),
             const SizedBox(height: 12),
