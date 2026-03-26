@@ -1,0 +1,96 @@
+name: Deploy – main
+
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build type'
+        required: true
+        default: 'release'
+        type: choice
+        options:
+          - release
+          - profile
+      target:
+        description: 'Target platform'
+        required: true
+        default: 'apk'
+        type: choice
+        options:
+          - apk
+          - appbundle
+
+jobs:
+  build-release:
+    name: Build ${{ github.event.inputs.build_type }} ${{ github.event.inputs.target }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Java (required for Android release signing)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      # ── Keystore setup (optional – uncomment when you have a signing key) ──
+      # - name: Decode keystore
+      #   run: |
+      #     echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/keystore.jks
+      #
+      # - name: Create key.properties
+      #   run: |
+      #     cat > android/key.properties <<EOF
+      #     storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+      #     keyPassword=${{ secrets.KEY_PASSWORD }}
+      #     keyAlias=${{ secrets.KEY_ALIAS }}
+      #     storeFile=keystore.jks
+      #     EOF
+
+      - name: Build ${{ github.event.inputs.build_type }} ${{ github.event.inputs.target }}
+        run: |
+          flutter build ${{ github.event.inputs.target }} \
+            --${{ github.event.inputs.build_type }} \
+            --dart-define=VISIONCRAFT_API_KEY=${{ secrets.VISIONCRAFT_API_KEY }} \
+            --dart-define=GOOGLE_WEB_CLIENT_ID=${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+
+      - name: Upload APK artifact
+        if: ${{ github.event.inputs.target == 'apk' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: visionart-${{ github.event.inputs.build_type }}-apk-${{ github.sha }}
+          path: build/app/outputs/flutter-apk/app-${{ github.event.inputs.build_type }}.apk
+          retention-days: 30
+
+      - name: Upload App Bundle artifact
+        if: ${{ github.event.inputs.target == 'appbundle' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: visionart-${{ github.event.inputs.build_type }}-aab-${{ github.sha }}
+          path: build/app/outputs/bundle/${{ github.event.inputs.build_type }}/app-${{ github.event.inputs.build_type }}.aab
+          retention-days: 30
+
+      - name: Summary
+        run: |
+          echo "## Build summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Type**: ${{ github.event.inputs.build_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Target**: ${{ github.event.inputs.target }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
