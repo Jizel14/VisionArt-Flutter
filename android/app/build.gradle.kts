@@ -7,7 +7,8 @@ plugins {
 
 android {
     namespace = "com.example.visionart_mobile"
-    compileSdk = flutter.compileSdkVersion
+    // Override Flutter defaults to match plugin requirements
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -25,7 +26,8 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
-        targetSdk = flutter.targetSdkVersion
+        // Keep targetSdk aligned with compileSdk for simplicity
+        targetSdk = 36
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
