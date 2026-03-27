@@ -46,7 +46,29 @@ class FollowService {
         '/social/follow/followers/list',
         queryParameters: {'userId': userId, 'page': page, 'limit': limit},
       );
-      return FollowersListModel.fromJson(response.data);
+
+      final payload = response.data as Map<String, dynamic>;
+      final rows = (payload['data'] as List<dynamic>? ?? const <dynamic>[])
+          .map((item) {
+            final map = item as Map<String, dynamic>;
+            final nested = map['follower'] as Map<String, dynamic>?;
+            return nested ?? map;
+          })
+          .map((item) => FollowerModel.fromJson(item))
+          .toList();
+
+      final pagination =
+          payload['pagination'] as Map<String, dynamic>? ?? <String, dynamic>{};
+
+      return FollowersListModel(
+        data: rows,
+        pagination: PaginationModel(
+          page: _toInt(pagination['page'], page),
+          limit: _toInt(pagination['limit'], limit),
+          total: _toInt(pagination['total'], rows.length),
+          totalPages: _toInt(pagination['totalPages'], 1),
+        ),
+      );
     } catch (e) {
       rethrow;
     }
@@ -63,7 +85,29 @@ class FollowService {
         '/social/follow/following/list',
         queryParameters: {'userId': userId, 'page': page, 'limit': limit},
       );
-      return FollowersListModel.fromJson(response.data);
+
+      final payload = response.data as Map<String, dynamic>;
+      final rows = (payload['data'] as List<dynamic>? ?? const <dynamic>[])
+          .map((item) {
+            final map = item as Map<String, dynamic>;
+            final nested = map['follower'] as Map<String, dynamic>?;
+            return nested ?? map;
+          })
+          .map((item) => FollowerModel.fromJson(item))
+          .toList();
+
+      final pagination =
+          payload['pagination'] as Map<String, dynamic>? ?? <String, dynamic>{};
+
+      return FollowersListModel(
+        data: rows,
+        pagination: PaginationModel(
+          page: _toInt(pagination['page'], page),
+          limit: _toInt(pagination['limit'], limit),
+          total: _toInt(pagination['total'], rows.length),
+          totalPages: _toInt(pagination['totalPages'], 1),
+        ),
+      );
     } catch (e) {
       rethrow;
     }
@@ -85,4 +129,10 @@ class FollowService {
       rethrow;
     }
   }
+}
+
+int _toInt(dynamic value, int fallback) {
+  if (value is int) return value;
+  if (value is String) return int.tryParse(value) ?? fallback;
+  return fallback;
 }

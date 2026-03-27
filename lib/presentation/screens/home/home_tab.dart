@@ -4,11 +4,14 @@ import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/services/artwork_service.dart';
 import '../../../core/services/follow_service.dart';
+import '../../../core/services/notifications_service.dart';
 import '../../../core/models/artwork_model.dart';
 import '../../../core/models/user_model.dart';
 import '../../theme/theme_extensions.dart';
 import '../splash/widgets/smoke_background.dart';
-import 'post_detail_screen.dart';
+import 'notifications_screen.dart';
+import '../profile/artwork_detail_screen.dart';
+import 'saved_collections_screen.dart';
 import '../profile/profile_inspect_screen.dart';
 
 class HomeTab extends StatefulWidget {
@@ -32,21 +35,25 @@ class HomeTab extends StatefulWidget {
 class _HomeTabState extends State<HomeTab> {
   late ArtworkService _artworkService;
   late FollowService _followService;
+  late NotificationsService _notificationsService;
   late ScrollController _scrollController;
 
   List<ArtworkModel> _artworks = [];
   bool _isLoadingFeed = false;
   bool _hasMore = true;
   int _currentPage = 1;
+  int _unreadNotificationsCount = 0;
 
   @override
   void initState() {
     super.initState();
     _artworkService = ArtworkService();
     _followService = FollowService();
+    _notificationsService = NotificationsService();
     _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
     _loadFeed();
+    _loadUnreadNotifications();
   }
 
   @override
@@ -83,6 +90,70 @@ class _HomeTabState extends State<HomeTab> {
     } catch (_) {
       setState(() => _isLoadingFeed = false);
     }
+  }
+
+  Future<void> _refreshFeed() async {
+    setState(() {
+      _artworks = [];
+      _currentPage = 1;
+      _hasMore = true;
+    });
+    await _loadFeed();
+  }
+
+  Future<void> _loadUnreadNotifications() async {
+    try {
+      final count = await _notificationsService.getUnreadCount();
+      if (!mounted) return;
+      setState(() => _unreadNotificationsCount = count);
+    } catch (_) {}
+  }
+
+  Future<void> _openNotifications() async {
+    final selectedArtworkId = await Navigator.push<String?>(
+      context,
+      MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+    );
+
+    if (!mounted) return;
+
+    if (selectedArtworkId != null && selectedArtworkId.isNotEmpty) {
+      await _openCommentsForArtworkId(selectedArtworkId);
+    }
+
+    _loadUnreadNotifications();
+  }
+
+  Future<void> _openCommentsForArtworkId(String artworkId) async {
+    final existingIndex = _artworks.indexWhere((item) => item.id == artworkId);
+    if (existingIndex >= 0) {
+      await _openComments(existingIndex);
+      return;
+    }
+
+    try {
+      final artwork = await _artworkService.getArtwork(artworkId);
+      if (!mounted) return;
+
+      setState(() {
+        _artworks.insert(0, artwork);
+      });
+
+      await _openComments(0);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to open artwork comments.')),
+      );
+    }
+  }
+
+  Future<void> _openSavedCollections() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SavedCollectionsScreen()),
+    );
+    _refreshFeed();
   }
 
   Future<void> _toggleFollow(int artworkIndex) async {
@@ -122,6 +193,774 @@ class _HomeTabState extends State<HomeTab> {
     } catch (_) {}
   }
 
+  Future<void> _toggleLike(int artworkIndex) async {
+    final artwork = _artworks[artworkIndex];
+    final wasLiked = artwork.isLikedByMe;
+    final optimisticLikes = wasLiked
+        ? (artwork.likesCount > 0 ? artwork.likesCount - 1 : 0)
+        : artwork.likesCount + 1;
+
+    setState(() {
+      _artworks[artworkIndex] = artwork.copyWith(
+        isLikedByMe: !wasLiked,
+        likesCount: optimisticLikes,
+      );
+    });
+
+    try {
+      final updatedLikesCount = wasLiked
+          ? await _artworkService.unlikeArtwork(artwork.id)
+          : await _artworkService.likeArtwork(artwork.id);
+
+      if (!mounted) return;
+      setState(() {
+        final updatedArtwork = _artworks[artworkIndex];
+        _artworks[artworkIndex] = updatedArtwork.copyWith(
+          likesCount: updatedLikesCount,
+          isLikedByMe: !wasLiked,
+        );
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _artworks[artworkIndex] = artwork;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to update like. Please retry.')),
+      );
+    }
+  }
+
+  Future<void> _toggleSave(int artworkIndex) async {
+    final artwork = _artworks[artworkIndex];
+    final wasSaved = artwork.isSavedByMe;
+
+    setState(() {
+      _artworks[artworkIndex] = artwork.copyWith(isSavedByMe: !wasSaved);
+    });
+
+    try {
+      if (wasSaved) {
+        await _artworkService.unsaveArtwork(artwork.id);
+      } else {
+        await _artworkService.saveArtwork(
+          artwork.id,
+          collectionName: 'Favorites',
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _artworks[artworkIndex] = artwork;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            wasSaved ? 'Failed to remove from saved' : 'Failed to save artwork',
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _openComments(int artworkIndex) async {
+    final artwork = _artworks[artworkIndex];
+    final TextEditingController commentCtrl = TextEditingController();
+    final List<ArtworkCommentItem> comments = [];
+    bool isLoadingComments = true;
+    bool isSubmitting = false;
+    bool isLoadingMentionSuggestions = false;
+    bool hasRequestedComments = false;
+    bool isSheetOpen = true;
+    ArtworkCommentItem? replyingTo;
+    List<MentionUserItem> mentionSuggestions = const <MentionUserItem>[];
+    final Map<String, String> selectedMentionIdsByName = {};
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.cardBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (sheetContext) {
+        Future<void> loadMentionSuggestions(
+          String input,
+          StateSetter setSheetState,
+        ) async {
+          final mentionToken = _extractMentionToken(input);
+          if (mentionToken == null || mentionToken.length < 2) {
+            if (!mounted || !isSheetOpen || !sheetContext.mounted) return;
+            setSheetState(() {
+              mentionSuggestions = const <MentionUserItem>[];
+              isLoadingMentionSuggestions = false;
+            });
+            return;
+          }
+
+          setSheetState(() => isLoadingMentionSuggestions = true);
+          try {
+            final users = await _artworkService.searchMentionUsers(
+              mentionToken,
+            );
+            if (!mounted || !isSheetOpen || !sheetContext.mounted) return;
+            setSheetState(() {
+              mentionSuggestions = users;
+              isLoadingMentionSuggestions = false;
+            });
+          } catch (_) {
+            if (!mounted || !isSheetOpen || !sheetContext.mounted) return;
+            setSheetState(() {
+              mentionSuggestions = const <MentionUserItem>[];
+              isLoadingMentionSuggestions = false;
+            });
+          }
+        }
+
+        void selectMention(MentionUserItem user, StateSetter setSheetState) {
+          final cursor = commentCtrl.selection.baseOffset;
+          final currentText = commentCtrl.text;
+          final safeCursor = cursor < 0 ? currentText.length : cursor;
+
+          final textBeforeCursor = currentText.substring(0, safeCursor);
+          final mentionStart = textBeforeCursor.lastIndexOf('@');
+
+          String nextText;
+          int nextCursor;
+
+          if (mentionStart >= 0) {
+            nextText =
+                '${currentText.substring(0, mentionStart)}@${user.name} ${currentText.substring(safeCursor)}';
+            nextCursor = mentionStart + user.name.length + 2;
+          } else {
+            nextText = '$currentText@${user.name} ';
+            nextCursor = nextText.length;
+          }
+
+          commentCtrl.value = TextEditingValue(
+            text: nextText,
+            selection: TextSelection.collapsed(offset: nextCursor),
+          );
+
+          setSheetState(() {
+            selectedMentionIdsByName[user.name.toLowerCase()] = user.id;
+            mentionSuggestions = const <MentionUserItem>[];
+            isLoadingMentionSuggestions = false;
+          });
+        }
+
+        List<String> resolveMentionedUserIds(String content) {
+          final lower = content.toLowerCase();
+          final ids = selectedMentionIdsByName.entries
+              .where((entry) => lower.contains('@${entry.key}'))
+              .map((entry) => entry.value)
+              .toSet()
+              .toList();
+          return ids;
+        }
+
+        ArtworkCommentItem appendReply(
+          ArtworkCommentItem parent,
+          ArtworkCommentItem reply,
+        ) {
+          return ArtworkCommentItem(
+            id: parent.id,
+            userId: parent.userId,
+            userName: parent.userName,
+            userAvatarUrl: parent.userAvatarUrl,
+            content: parent.content,
+            createdAt: parent.createdAt,
+            parentCommentId: parent.parentCommentId,
+            isEdited: parent.isEdited,
+            replies: [...parent.replies, reply],
+          );
+        }
+
+        Future<void> loadComments(StateSetter setSheetState) async {
+          try {
+            final fetched = await _artworkService.getArtworkComments(
+              artwork.id,
+            );
+            if (!mounted || !isSheetOpen || !sheetContext.mounted) return;
+            setSheetState(() {
+              comments
+                ..clear()
+                ..addAll(fetched);
+              isLoadingComments = false;
+            });
+          } catch (_) {
+            if (!mounted || !isSheetOpen || !sheetContext.mounted) return;
+            setSheetState(() => isLoadingComments = false);
+          }
+        }
+
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            if (isLoadingComments &&
+                comments.isEmpty &&
+                !hasRequestedComments) {
+              hasRequestedComments = true;
+              loadComments(setSheetState);
+            }
+
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 14,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Comments',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: context.textPrimaryColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 280,
+                    child: isLoadingComments
+                        ? const Center(child: CircularProgressIndicator())
+                        : comments.isEmpty
+                        ? Center(
+                            child: Text(
+                              'No comments yet',
+                              style: TextStyle(
+                                color: context.textSecondaryColor,
+                              ),
+                            ),
+                          )
+                        : ListView.separated(
+                            itemCount: comments.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 16),
+                            itemBuilder: (_, index) {
+                              final comment = comments[index];
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      CircleAvatar(
+                                        radius: 14,
+                                        backgroundImage:
+                                            comment.userAvatarUrl != null
+                                            ? NetworkImage(
+                                                comment.userAvatarUrl!,
+                                              )
+                                            : null,
+                                        child: comment.userAvatarUrl == null
+                                            ? Text(
+                                                comment.userName.isNotEmpty
+                                                    ? comment.userName[0]
+                                                          .toUpperCase()
+                                                    : '?',
+                                              )
+                                            : null,
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              comment.userName,
+                                              style: TextStyle(
+                                                color: context.textPrimaryColor,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              comment.content,
+                                              style: TextStyle(
+                                                color:
+                                                    context.textSecondaryColor,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            GestureDetector(
+                                              onTap: () {
+                                                setSheetState(() {
+                                                  replyingTo = comment;
+                                                  commentCtrl.text =
+                                                      '@${comment.userName} ';
+                                                  commentCtrl.selection =
+                                                      TextSelection.collapsed(
+                                                        offset: commentCtrl
+                                                            .text
+                                                            .length,
+                                                      );
+                                                  selectedMentionIdsByName[comment
+                                                          .userName
+                                                          .toLowerCase()] =
+                                                      comment.userId;
+                                                });
+                                              },
+                                              child: Text(
+                                                'Reply',
+                                                style: TextStyle(
+                                                  color: Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary,
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if (comment.replies.isNotEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    Padding(
+                                      padding: const EdgeInsets.only(left: 24),
+                                      child: Column(
+                                        children: comment.replies.map((reply) {
+                                          return Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 8,
+                                            ),
+                                            child: Row(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                CircleAvatar(
+                                                  radius: 12,
+                                                  backgroundImage:
+                                                      reply.userAvatarUrl !=
+                                                          null
+                                                      ? NetworkImage(
+                                                          reply.userAvatarUrl!,
+                                                        )
+                                                      : null,
+                                                  child:
+                                                      reply.userAvatarUrl ==
+                                                          null
+                                                      ? Text(
+                                                          reply
+                                                                  .userName
+                                                                  .isNotEmpty
+                                                              ? reply
+                                                                    .userName[0]
+                                                                    .toUpperCase()
+                                                              : '?',
+                                                          style:
+                                                              const TextStyle(
+                                                                fontSize: 11,
+                                                              ),
+                                                        )
+                                                      : null,
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: Column(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      Text(
+                                                        reply.userName,
+                                                        style: TextStyle(
+                                                          color: context
+                                                              .textPrimaryColor,
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                      const SizedBox(height: 2),
+                                                      Text(
+                                                        reply.content,
+                                                        style: TextStyle(
+                                                          color: context
+                                                              .textSecondaryColor,
+                                                          fontSize: 12,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        }).toList(),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              );
+                            },
+                          ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (replyingTo != null)
+                    Container(
+                      width: double.infinity,
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: context.surfaceColor.withOpacity(0.35),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Replying to ${replyingTo!.userName}',
+                              style: TextStyle(
+                                color: context.textSecondaryColor,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                          GestureDetector(
+                            onTap: () {
+                              setSheetState(() {
+                                replyingTo = null;
+                              });
+                            },
+                            child: Text(
+                              'Cancel',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.primary,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (isLoadingMentionSuggestions)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 8),
+                      child: LinearProgressIndicator(minHeight: 2),
+                    )
+                  else if (mentionSuggestions.isNotEmpty)
+                    Container(
+                      constraints: const BoxConstraints(maxHeight: 150),
+                      margin: const EdgeInsets.only(bottom: 8),
+                      decoration: BoxDecoration(
+                        color: context.surfaceColor.withOpacity(0.45),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: context.borderColor.withOpacity(0.4),
+                        ),
+                      ),
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: mentionSuggestions.length,
+                        separatorBuilder: (_, __) => Divider(
+                          height: 1,
+                          color: context.borderColor.withOpacity(0.3),
+                        ),
+                        itemBuilder: (_, index) {
+                          final user = mentionSuggestions[index];
+                          return ListTile(
+                            dense: true,
+                            leading: CircleAvatar(
+                              radius: 12,
+                              backgroundImage: user.avatarUrl != null
+                                  ? NetworkImage(user.avatarUrl!)
+                                  : null,
+                              child: user.avatarUrl == null
+                                  ? Text(
+                                      user.name.isNotEmpty
+                                          ? user.name[0].toUpperCase()
+                                          : '?',
+                                      style: const TextStyle(fontSize: 11),
+                                    )
+                                  : null,
+                            ),
+                            title: Text(
+                              user.name,
+                              style: TextStyle(
+                                color: context.textPrimaryColor,
+                                fontSize: 13,
+                              ),
+                            ),
+                            onTap: () => selectMention(user, setSheetState),
+                          );
+                        },
+                      ),
+                    ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: commentCtrl,
+                          onChanged: (value) {
+                            loadMentionSuggestions(value, setSheetState);
+                          },
+                          style: TextStyle(color: context.textPrimaryColor),
+                          decoration: InputDecoration(
+                            hintText: replyingTo != null
+                                ? 'Write a reply...'
+                                : 'Write a comment...',
+                            hintStyle: TextStyle(
+                              color: context.textSecondaryColor,
+                            ),
+                            filled: true,
+                            fillColor: context.surfaceColor.withOpacity(0.4),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide.none,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: isSubmitting
+                            ? null
+                            : () async {
+                                final content = commentCtrl.text.trim();
+                                if (content.isEmpty) return;
+
+                                final mentionUserIds = resolveMentionedUserIds(
+                                  content,
+                                );
+
+                                setSheetState(() => isSubmitting = true);
+                                try {
+                                  final created = await _artworkService
+                                      .createArtworkComment(
+                                        artwork.id,
+                                        content,
+                                        parentCommentId: replyingTo?.id,
+                                        mentionedUserIds: mentionUserIds,
+                                      );
+
+                                  if (!mounted ||
+                                      !isSheetOpen ||
+                                      !sheetContext.mounted)
+                                    return;
+                                  setSheetState(() {
+                                    if (created.parentCommentId != null) {
+                                      final parentIndex = comments.indexWhere(
+                                        (item) =>
+                                            item.id == created.parentCommentId,
+                                      );
+                                      if (parentIndex >= 0) {
+                                        comments[parentIndex] = appendReply(
+                                          comments[parentIndex],
+                                          created,
+                                        );
+                                      } else {
+                                        comments.insert(0, created);
+                                      }
+                                    } else {
+                                      comments.insert(0, created);
+                                    }
+                                    commentCtrl.clear();
+                                    replyingTo = null;
+                                    mentionSuggestions =
+                                        const <MentionUserItem>[];
+                                    isSubmitting = false;
+                                  });
+
+                                  setState(() {
+                                    final current = _artworks[artworkIndex];
+                                    _artworks[artworkIndex] = current.copyWith(
+                                      commentsCount: current.commentsCount + 1,
+                                    );
+                                  });
+                                } catch (_) {
+                                  if (!mounted ||
+                                      !isSheetOpen ||
+                                      !sheetContext.mounted)
+                                    return;
+                                  setSheetState(() => isSubmitting = false);
+                                  ScaffoldMessenger.of(
+                                    this.context,
+                                  ).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Failed to send comment.'),
+                                    ),
+                                  );
+                                }
+                              },
+                        icon: isSubmitting
+                            ? const SizedBox(
+                                height: 16,
+                                width: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(Icons.send_rounded),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    ).whenComplete(() {
+      isSheetOpen = false;
+    });
+  }
+
+  String? _extractMentionToken(String text) {
+    if (text.isEmpty) return null;
+
+    final match = RegExp(r'@([A-Za-z0-9._-]{1,64})$').firstMatch(text);
+    return match?.group(1);
+  }
+
+  Future<void> _openReport(int artworkIndex) async {
+    final artwork = _artworks[artworkIndex];
+    final TextEditingController detailsCtrl = TextEditingController();
+    String selectedReason = ArtworkService.reportReasons.first;
+    bool isSubmitting = false;
+    bool isSheetOpen = true;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.cardBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 14,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Report Artwork',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: context.textPrimaryColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedReason,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: context.surfaceColor.withOpacity(0.4),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                    items: ArtworkService.reportReasons
+                        .map(
+                          (reason) => DropdownMenuItem<String>(
+                            value: reason,
+                            child: Text(reason),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setSheetState(() => selectedReason = value);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: detailsCtrl,
+                    minLines: 3,
+                    maxLines: 4,
+                    style: TextStyle(color: context.textPrimaryColor),
+                    decoration: InputDecoration(
+                      hintText: 'Optional details...',
+                      hintStyle: TextStyle(color: context.textSecondaryColor),
+                      filled: true,
+                      fillColor: context.surfaceColor.withOpacity(0.4),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: isSubmitting
+                          ? null
+                          : () async {
+                              setSheetState(() => isSubmitting = true);
+                              try {
+                                await _artworkService.reportArtwork(
+                                  artworkId: artwork.id,
+                                  reason: selectedReason,
+                                  details: detailsCtrl.text.trim(),
+                                );
+
+                                if (!mounted ||
+                                    !isSheetOpen ||
+                                    !sheetContext.mounted)
+                                  return;
+                                Navigator.of(context).pop();
+                                ScaffoldMessenger.of(this.context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Artwork reported successfully.',
+                                    ),
+                                  ),
+                                );
+                              } catch (_) {
+                                if (!mounted ||
+                                    !isSheetOpen ||
+                                    !sheetContext.mounted)
+                                  return;
+                                setSheetState(() => isSubmitting = false);
+                                ScaffoldMessenger.of(this.context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Failed to report artwork.'),
+                                  ),
+                                );
+                              }
+                            },
+                      child: isSubmitting
+                          ? const SizedBox(
+                              height: 18,
+                              width: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text('Submit report'),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    ).whenComplete(() {
+      isSheetOpen = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final textPrimary = context.textPrimaryColor;
@@ -148,6 +987,50 @@ class _HomeTabState extends State<HomeTab> {
                                     fontWeight: FontWeight.w700,
                                   ),
                             ),
+                          ),
+                          IconButton(
+                            onPressed: _openSavedCollections,
+                            icon: Icon(
+                              Icons.bookmark_rounded,
+                              color: textPrimary,
+                            ),
+                          ),
+                          Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              IconButton(
+                                onPressed: _openNotifications,
+                                icon: Icon(
+                                  Icons.notifications_rounded,
+                                  color: textPrimary,
+                                ),
+                              ),
+                              if (_unreadNotificationsCount > 0)
+                                Positioned(
+                                  right: 6,
+                                  top: 8,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 5,
+                                      vertical: 1,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.redAccent,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: Text(
+                                      _unreadNotificationsCount > 99
+                                          ? '99+'
+                                          : '$_unreadNotificationsCount',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                           IconButton(
                             onPressed: widget.onToggleTheme,
@@ -235,26 +1118,20 @@ class _HomeTabState extends State<HomeTab> {
                                         onTapCard: () {
                                           Navigator.push(
                                             context,
-                                            PostDetailScreen.route(
-                                              PostDetailScreen(
-                                                author: artwork.user.name,
-                                                avatarEmoji:
-                                                    artwork.user.avatarUrl ??
-                                                    '\u{1F3A8}',
-                                                quote:
-                                                    artwork.description ?? '',
-                                                imageUrl: artwork.imageUrl,
-                                                imageColor: Colors.purple,
-                                                likes: artwork.likesCount,
-                                                comments: artwork.commentsCount,
-                                                time: _formatTime(
-                                                  artwork.createdAt,
-                                                ),
-                                              ),
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  ArtworkDetailScreen(
+                                                    artwork: artwork,
+                                                  ),
                                             ),
                                           );
                                         },
                                         onTapFollow: () => _toggleFollow(index),
+                                        onTapLike: () => _toggleLike(index),
+                                        onTapSave: () => _toggleSave(index),
+                                        onTapComments: () =>
+                                            _openComments(index),
+                                        onTapReport: () => _openReport(index),
                                       ),
                                     ),
                                   ),
@@ -294,18 +1171,6 @@ class _HomeTabState extends State<HomeTab> {
       ),
     );
   }
-
-  String _formatTime(DateTime dateTime) {
-    final difference = DateTime.now().difference(dateTime);
-
-    if (difference.inMinutes < 60) {
-      return '${difference.inMinutes}m ago';
-    } else if (difference.inHours < 24) {
-      return '${difference.inHours}h ago';
-    } else {
-      return '${difference.inDays}d ago';
-    }
-  }
 }
 
 class _FeedCard extends StatefulWidget {
@@ -317,6 +1182,10 @@ class _FeedCard extends StatefulWidget {
     required this.onTapAuthor,
     required this.onTapCard,
     required this.onTapFollow,
+    required this.onTapLike,
+    required this.onTapSave,
+    required this.onTapComments,
+    required this.onTapReport,
   });
 
   final ArtworkModel artwork;
@@ -326,6 +1195,10 @@ class _FeedCard extends StatefulWidget {
   final VoidCallback onTapAuthor;
   final VoidCallback onTapCard;
   final VoidCallback onTapFollow;
+  final VoidCallback onTapLike;
+  final VoidCallback onTapSave;
+  final VoidCallback onTapComments;
+  final VoidCallback onTapReport;
 
   @override
   State<_FeedCard> createState() => _FeedCardState();
@@ -335,6 +1208,8 @@ class _FeedCardState extends State<_FeedCard> {
   @override
   Widget build(BuildContext context) {
     final isFollowing = widget.artwork.isFollowedByMe;
+    final isLiked = widget.artwork.isLikedByMe;
+    final isSaved = widget.artwork.isSavedByMe;
 
     return GestureDetector(
       onTap: widget.onTapCard,
@@ -413,10 +1288,96 @@ class _FeedCardState extends State<_FeedCard> {
             const SizedBox(height: 12),
             ClipRRect(
               borderRadius: BorderRadius.circular(12),
-              child: CachedNetworkImage(
-                imageUrl: widget.artwork.imageUrl,
-                fit: BoxFit.cover,
-                width: double.infinity,
+              child: Hero(
+                tag: 'artwork_image_${widget.artwork.id}',
+                child: CachedNetworkImage(
+                  imageUrl: widget.artwork.imageUrl,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _FooterAction(
+                  icon: isLiked
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  label: _formatCompactCount(widget.artwork.likesCount),
+                  color: isLiked ? Colors.pinkAccent : widget.textSecondary,
+                  onTap: widget.onTapLike,
+                ),
+                const SizedBox(width: 12),
+                _FooterAction(
+                  icon: Icons.mode_comment_outlined,
+                  label: _formatCompactCount(widget.artwork.commentsCount),
+                  color: widget.textSecondary,
+                  onTap: widget.onTapComments,
+                ),
+                const SizedBox(width: 12),
+                _FooterAction(
+                  icon: isSaved
+                      ? Icons.bookmark_rounded
+                      : Icons.bookmark_outline_rounded,
+                  label: isSaved ? 'Saved' : 'Save',
+                  color: isSaved ? Colors.amberAccent : widget.textSecondary,
+                  onTap: widget.onTapSave,
+                ),
+                const Spacer(),
+                IconButton(
+                  onPressed: widget.onTapReport,
+                  icon: Icon(Icons.flag_outlined, color: widget.textSecondary),
+                  tooltip: 'Report',
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatCompactCount(int value) {
+    if (value >= 1000000) {
+      return '${(value / 1000000).toStringAsFixed(1)}M';
+    }
+    if (value >= 1000) {
+      return '${(value / 1000).toStringAsFixed(1)}K';
+    }
+    return '$value';
+  }
+}
+
+class _FooterAction extends StatelessWidget {
+  const _FooterAction({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        child: Row(
+          children: [
+            Icon(icon, size: 20, color: color),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: TextStyle(
+                color: context.textSecondaryColor,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],

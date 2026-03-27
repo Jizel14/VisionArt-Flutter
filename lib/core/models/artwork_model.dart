@@ -26,6 +26,8 @@ class ArtworkModel {
   final int remixCount;
   final bool isLikedByMe;
   @JsonKey(defaultValue: false)
+  final bool isSavedByMe;
+  @JsonKey(defaultValue: false)
   final bool isFollowedByMe;
   final bool isPublic;
   final bool isNSFW;
@@ -43,6 +45,7 @@ class ArtworkModel {
     required this.commentsCount,
     required this.remixCount,
     required this.isLikedByMe,
+    this.isSavedByMe = false,
     this.isFollowedByMe = false,
     required this.isPublic,
     required this.isNSFW,
@@ -66,6 +69,7 @@ class ArtworkModel {
     int? commentsCount,
     int? remixCount,
     bool? isLikedByMe,
+    bool? isSavedByMe,
     bool? isFollowedByMe,
     bool? isPublic,
     bool? isNSFW,
@@ -83,6 +87,7 @@ class ArtworkModel {
       commentsCount: commentsCount ?? this.commentsCount,
       remixCount: remixCount ?? this.remixCount,
       isLikedByMe: isLikedByMe ?? this.isLikedByMe,
+      isSavedByMe: isSavedByMe ?? this.isSavedByMe,
       isFollowedByMe: isFollowedByMe ?? this.isFollowedByMe,
       isPublic: isPublic ?? this.isPublic,
       isNSFW: isNSFW ?? this.isNSFW,

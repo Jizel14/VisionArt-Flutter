@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/services/artwork_service.dart';
 import '../../../core/models/artwork_model.dart';
 import 'artwork_detail_screen.dart';
@@ -138,19 +139,21 @@ class _UserGalleryScreenState extends State<UserGalleryScreen> {
           fit: StackFit.expand,
           children: [
             // Image
-            Image.network(
-              artwork.imageUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Container(
-                  color: Colors.grey[300],
-                  child: const Icon(Icons.broken_image),
-                );
-              },
-              loadingBuilder: (context, child, loadingProgress) {
-                if (loadingProgress == null) return child;
-                return const Center(child: CircularProgressIndicator());
-              },
+            Hero(
+              tag: 'artwork_image_${artwork.id}',
+              child: CachedNetworkImage(
+                imageUrl: artwork.imageUrl,
+                fit: BoxFit.cover,
+                errorWidget: (context, url, error) {
+                  return Container(
+                    color: Colors.grey[300],
+                    child: const Icon(Icons.broken_image),
+                  );
+                },
+                placeholder: (context, url) {
+                  return const Center(child: CircularProgressIndicator());
+                },
+              ),
             ),
             // Overlay
             Container(

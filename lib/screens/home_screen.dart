@@ -95,10 +95,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return Scaffold(
         backgroundColor: context.surfaceColor,
         body: Center(
-          child: Text(
-            _error!,
-            style: TextStyle(color: AppColors.error),
-          ),
+          child: Text(_error!, style: TextStyle(color: AppColors.error)),
         ),
       );
     }
@@ -118,6 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ProfileScreen(
             authService: widget.authService,
             apiClient: null,
+            userId: _user?['id'] ?? '',
             userName: _user?['name'] ?? 'User',
             userEmail: _user?['email'] ?? '',
             avatarUrl: _user?['avatarUrl'],
@@ -147,10 +145,7 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _ThemedBottomNav extends StatelessWidget {
-  const _ThemedBottomNav({
-    required this.currentIndex,
-    required this.onTap,
-  });
+  const _ThemedBottomNav({required this.currentIndex, required this.onTap});
 
   final int currentIndex;
   final ValueChanged<int> onTap;
@@ -239,8 +234,7 @@ class _NavItem extends StatelessWidget {
                 label,
                 style: TextStyle(
                   fontSize: 12,
-                  fontWeight:
-                      isSelected ? FontWeight.w600 : FontWeight.w500,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                   color: isSelected ? Colors.white : secondaryColor,
                 ),
               ),
