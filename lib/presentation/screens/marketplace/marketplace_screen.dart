@@ -1,208 +1,630 @@
 import 'dart:ui';
 
-import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
 
-import '../../../core/mock_image_urls.dart';
 import '../../../core/auth_service.dart';
+import '../../../core/models/artwork_model.dart';
+import '../../../core/services/artwork_service.dart';
+import '../../../core/services/marketplace_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
-import '../splash/widgets/smoke_background.dart';
 import '../report/report_screen.dart';
+import '../splash/widgets/smoke_background.dart';
 import 'art_detail_screen.dart';
+import 'marketplace_balance_screen.dart';
 
-/// Marketplace: buy/sell AI art with Web3 / NFT feel. Price + Buy or Negotiate.
-class MarketplaceScreen extends StatelessWidget {
+class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key, required this.authService});
 
   final AuthService authService;
 
-  static final List<Map<String, dynamic>> _mockListings = [
-    {
-      'id': '1',
-      'title': 'Cosmic Drift',
-      'artist': '0x7a3f...9e2c',
-      'price': '0.08',
-      'currency': 'ETH',
-      'priceUsd': '~ \$240',
-      'imageColor': 0xFF7C3AED,
-      'imageUrl': MockImageUrls.at(4),
-      'negotiable': true,
-    },
-    {
-      'id': '2',
-      'title': 'Neon Dreams',
-      'artist': '0x4b2c...1a9d',
-      'price': '120',
-      'currency': '\$ART',
-      'priceUsd': '',
-      'imageColor': 0xFFEC4899,
-      'imageUrl': MockImageUrls.at(5),
-      'negotiable': true,
-    },
-    {
-      'id': '3',
-      'title': 'Abstract Pulse',
-      'artist': '0x9e1f...4c7b',
-      'price': '0.05',
-      'currency': 'ETH',
-      'priceUsd': '~ \$150',
-      'imageColor': 0xFF3B82F6,
-      'imageUrl': MockImageUrls.at(6),
-      'negotiable': false,
-    },
-    {
-      'id': '4',
-      'title': 'Serenity #42',
-      'artist': '0x2d8a...b3e1',
-      'price': '85',
-      'currency': '\$ART',
-      'priceUsd': '',
-      'imageColor': 0xFF10B981,
-      'imageUrl': MockImageUrls.at(7),
-      'negotiable': true,
-    },
-  ];
+  @override
+  State<MarketplaceScreen> createState() => _MarketplaceScreenState();
+}
+
+class _MarketplaceScreenState extends State<MarketplaceScreen> {
+  final MarketplaceService _marketplaceService = MarketplaceService();
+  final ArtworkService _artworkService = ArtworkService();
+
+  List<Map<String, dynamic>> _listings = const <Map<String, dynamic>>[];
+  bool _isLoadingListings = false;
+  String? _listingsError;
+  bool _showMyListings = false;
+
+  Map<String, dynamic>? _walletData;
+  bool _isLoadingWallet = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadInitial();
+  }
+
+  Future<void> _loadInitial() async {
+    await Future.wait([_loadListings(), _loadWallet()]);
+  }
+
+  Future<void> _loadWallet() async {
+    setState(() => _isLoadingWallet = true);
+    try {
+      final wallet = await _marketplaceService.getMyWallet();
+      if (!mounted) return;
+      setState(() {
+        _walletData = wallet;
+        _isLoadingWallet = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoadingWallet = false);
+    }
+  }
+
+  Future<void> _loadListings() async {
+    setState(() {
+      _isLoadingListings = true;
+      _listingsError = null;
+    });
+
+    try {
+      final result = _showMyListings
+          ? await _marketplaceService.getMyListings(limit: 30)
+          : await _marketplaceService.getListings(limit: 30);
+      final data = (result['data'] as List<dynamic>? ?? const <dynamic>[])
+          .cast<Map<String, dynamic>>();
+      if (!mounted) return;
+      setState(() {
+        _listings = data;
+        _isLoadingListings = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _listingsError = e.toString();
+        _isLoadingListings = false;
+      });
+    }
+  }
+
+  String _money(dynamic value) {
+    final n = value is num ? value.toDouble() : double.tryParse('$value') ?? 0;
+    return n.toStringAsFixed(2);
+  }
+
+  Future<void> _openBalance() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => MarketplaceBalanceScreen(service: _marketplaceService),
+      ),
+    );
+    await _loadWallet();
+  }
+
+  Future<void> _buyListing(String listingId) async {
+    final pageContext = context;
+    final txHashController = TextEditingController();
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Confirm purchase'),
+          content: TextField(
+            controller: txHashController,
+            decoration: const InputDecoration(
+              labelText: 'Transaction hash (optional)',
+              hintText: '0x...',
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final txHash = txHashController.text.trim().isEmpty
+                    ? null
+                    : txHashController.text.trim();
+                Navigator.of(context).pop();
+                try {
+                  await _marketplaceService.buyListing(
+                    listingId,
+                    txHash: txHash,
+                  );
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(pageContext).showSnackBar(
+                    const SnackBar(
+                      content: Text('Purchase completed successfully'),
+                    ),
+                  );
+                  await _loadInitial();
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(pageContext).showSnackBar(
+                    SnackBar(content: Text('Purchase failed: $e')),
+                  );
+                }
+              },
+              child: const Text('Buy now'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _cancelListing(String listingId) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel listing'),
+        content: const Text('Are you sure you want to cancel this listing?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('No'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Yes, cancel'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await _marketplaceService.cancelListing(listingId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Listing cancelled')));
+      await _loadListings();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Unable to cancel listing: $e')));
+    }
+  }
+
+  Future<void> _showListArtworkSheet() async {
+    final pageContext = context;
+    List<ArtworkModel> myArtworks = const <ArtworkModel>[];
+    ArtworkModel? selected;
+    final priceController = TextEditingController();
+    final txHashController = TextEditingController();
+    bool negotiable = false;
+    String currency = 'USDC';
+
+    try {
+      final result = await _artworkService.getMyArtworks(page: 1, limit: 50);
+      myArtworks = result.data.where((artwork) => artwork.isPublic).toList();
+      if (myArtworks.isNotEmpty) {
+        selected = myArtworks.first;
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Unable to load artworks: $e')));
+      return;
+    }
+
+    if (myArtworks.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('You need at least one public artwork to list.'),
+        ),
+      );
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: this.context.cardBackgroundColor,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'List artwork on marketplace',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<ArtworkModel>(
+                      value: selected,
+                      items: myArtworks
+                          .map(
+                            (artwork) => DropdownMenuItem<ArtworkModel>(
+                              value: artwork,
+                              child: Text(
+                                artwork.title?.isNotEmpty == true
+                                    ? artwork.title!
+                                    : 'Untitled artwork',
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (value) {
+                        setModalState(() => selected = value);
+                      },
+                      decoration: const InputDecoration(labelText: 'Artwork'),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: priceController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Price',
+                        hintText: 'e.g. 25',
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      value: currency,
+                      items: const [
+                        DropdownMenuItem(value: 'USDC', child: Text('USDC')),
+                        DropdownMenuItem(value: 'POL', child: Text('POL')),
+                      ],
+                      onChanged: (value) {
+                        if (value == null) return;
+                        setModalState(() => currency = value);
+                      },
+                      decoration: const InputDecoration(labelText: 'Currency'),
+                    ),
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      value: negotiable,
+                      onChanged: (value) {
+                        setModalState(() => negotiable = value);
+                      },
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Negotiable price'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: txHashController,
+                      decoration: const InputDecoration(
+                        labelText: 'Listing tx hash (optional)',
+                        hintText: '0x...',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        onPressed: () async {
+                          final selectedArtwork = selected;
+                          final price = double.tryParse(
+                            priceController.text.trim(),
+                          );
+                          if (selectedArtwork == null ||
+                              price == null ||
+                              price <= 0) {
+                            return;
+                          }
+
+                          Navigator.of(context).pop();
+
+                          try {
+                            await _marketplaceService.createListing(
+                              artworkId: selectedArtwork.id,
+                              price: price,
+                              currency: currency,
+                              negotiable: negotiable,
+                              txHash: txHashController.text.trim().isEmpty
+                                  ? null
+                                  : txHashController.text.trim(),
+                            );
+
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(pageContext).showSnackBar(
+                              const SnackBar(
+                                content: Text('Artwork listed successfully'),
+                              ),
+                            );
+                            await _loadListings();
+                          } catch (e) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(pageContext).showSnackBar(
+                              SnackBar(
+                                content: Text('Failed to create listing: $e'),
+                              ),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.sell_rounded),
+                        label: const Text('List now'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final textPrimary = context.textPrimaryColor;
     final textSecondary = context.textSecondaryColor;
 
+    final wallet = _walletData?['wallet'] as Map<String, dynamic>?;
+
     return SmokeBackground(
       child: SafeArea(
-        child: CustomScrollView(
-          slivers: [
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                AppColors.ethGold.withOpacity(0.3),
-                                AppColors.chainCyan.withOpacity(0.2),
+        child: RefreshIndicator(
+          onRefresh: _loadInitial,
+          child: CustomScrollView(
+            slivers: [
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  AppColors.ethGold.withOpacity(0.3),
+                                  AppColors.chainCyan.withOpacity(0.2),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: AppColors.ethGold.withOpacity(0.5),
+                                width: 1,
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.storefront_rounded,
+                              color: AppColors.ethGold,
+                              size: 28,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Marketplace',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .headlineSmall
+                                      ?.copyWith(
+                                        color: textPrimary,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Buy & sell AI art · Live market actions',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: AppColors.chainCyan.withOpacity(
+                                          0.95,
+                                        ),
+                                        letterSpacing: 0.5,
+                                      ),
+                                ),
+                                const SizedBox(height: 8),
+                                if (_isLoadingWallet)
+                                  Text(
+                                    'Loading wallet…',
+                                    style: TextStyle(color: textSecondary),
+                                  )
+                                else
+                                  Text(
+                                    'Balance: ${_money(wallet?['availableBalance'])} ${wallet?['currency'] ?? 'USDC'}',
+                                    style: TextStyle(
+                                      color: AppColors.ethGold,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                               ],
                             ),
-                            borderRadius: BorderRadius.circular(14),
-                            border: Border.all(
-                              color: AppColors.ethGold.withOpacity(0.5),
-                              width: 1,
+                          ),
+                          IconButton.filledTonal(
+                            onPressed: _openBalance,
+                            tooltip: 'Balance',
+                            icon: const Icon(
+                              Icons.account_balance_wallet_rounded,
                             ),
                           ),
-                          child: Icon(
-                            Icons.account_balance_wallet_rounded,
+                          const SizedBox(width: 6),
+                          IconButton.filled(
+                            onPressed: _showListArtworkSheet,
+                            tooltip: 'List artwork',
+                            icon: const Icon(Icons.add_rounded),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          _Pill(
+                            icon: Icons.sell_rounded,
+                            label: '${_listings.length} active listings',
+                            color: AppColors.success,
+                          ),
+                          const SizedBox(width: 10),
+                          const _Pill(
+                            icon: Icons.account_balance_wallet_rounded,
+                            label: 'Wallet enabled',
                             color: AppColors.ethGold,
-                            size: 28,
                           ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Marketplace',
-                                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                      color: textPrimary,
-                                      fontWeight: FontWeight.w800,
-                                    ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      SegmentedButton<bool>(
+                        segments: const [
+                          ButtonSegment<bool>(
+                            value: false,
+                            label: Text('All Listings'),
+                            icon: Icon(Icons.public_rounded),
+                          ),
+                          ButtonSegment<bool>(
+                            value: true,
+                            label: Text('My Listings'),
+                            icon: Icon(Icons.person_rounded),
+                          ),
+                        ],
+                        selected: {_showMyListings},
+                        onSelectionChanged: (selection) async {
+                          final selected = selection.first;
+                          if (_showMyListings == selected) return;
+                          setState(() => _showMyListings = selected);
+                          await _loadListings();
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              if (_isLoadingListings)
+                const SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_listingsError != null)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Text(
+                      _listingsError!,
+                      style: TextStyle(color: AppColors.error),
+                    ),
+                  ),
+                )
+              else if (_listings.isEmpty)
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Center(
+                    child: Text(
+                      'No active listings yet. Create your first listing.',
+                      style: TextStyle(color: textSecondary),
+                    ),
+                  ),
+                )
+              else
+                SliverPadding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
+                  sliver: SliverList(
+                    delegate: SliverChildBuilderDelegate((context, index) {
+                      final item = _listings[index];
+                      final artwork =
+                          item['artwork'] as Map<String, dynamic>? ??
+                          <String, dynamic>{};
+                      final seller =
+                          item['seller'] as Map<String, dynamic>? ??
+                          <String, dynamic>{};
+
+                      final listingId = (item['id'] ?? '').toString();
+                      final isMine = item['isMine'] == true;
+                      final negotiable = item['negotiable'] == true;
+                      final isActive = item['isActive'] == true;
+                      final status = (item['status'] ?? '').toString();
+                      final canCancel =
+                          isMine &&
+                          isActive &&
+                          (status == 'listed' || status == 'listed_onchain');
+
+                      return _ListingCard(
+                        title: (artwork['title'] ?? 'Untitled artwork')
+                            .toString(),
+                        artist: (seller['name'] ?? 'Unknown').toString(),
+                        price: _money(item['price']),
+                        currency: (item['currency'] ?? 'USDC').toString(),
+                        imageUrl: artwork['imageUrl']?.toString(),
+                        imageColor: AppColors.polygonPurple,
+                        negotiable: negotiable,
+                        isMine: isMine,
+                        status: status,
+                        textPrimary: textPrimary,
+                        textSecondary: textSecondary,
+                        onReport: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => ReportScreen(
+                                authService: widget.authService,
+                                initialType: 'artwork',
+                                targetId: listingId,
+                                targetLabel: (artwork['title'] ?? 'Artwork')
+                                    .toString(),
                               ),
-                              const SizedBox(height: 2),
-                              Text(
-                                'Buy & sell AI art · NFT',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: AppColors.chainCyan.withOpacity(0.95),
-                                      letterSpacing: 0.5,
-                                    ),
+                            ),
+                          );
+                        },
+                        onTap: () {
+                          Navigator.of(context).push(
+                            ArtDetailScreen.route(
+                              ArtDetailScreen(
+                                title: (artwork['title'] ?? 'Untitled artwork')
+                                    .toString(),
+                                artist: (seller['name'] ?? 'Unknown')
+                                    .toString(),
+                                price: _money(item['price']),
+                                currency: (item['currency'] ?? 'USDC')
+                                    .toString(),
+                                priceUsd: null,
+                                imageUrl: artwork['imageUrl']?.toString(),
+                                imageColor: AppColors.polygonPurple,
+                                negotiable: negotiable,
                               ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-                child: Row(
-                  children: [
-                    _Pill(
-                      icon: Icons.sell_rounded,
-                      label: 'For sale',
-                      color: AppColors.success,
-                    ),
-                    const SizedBox(width: 10),
-                    _Pill(
-                      icon: Icons.handshake_rounded,
-                      label: 'Negotiate',
-                      color: AppColors.ethGold,
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final item = _mockListings[index];
-                    return _ListingCard(
-                      title: item['title'] as String,
-                      artist: item['artist'] as String,
-                      price: item['price'] as String,
-                      currency: item['currency'] as String,
-                      priceUsd: item['priceUsd'] as String?,
-                      imageUrl: item['imageUrl'] as String?,
-                      imageColor: Color(item['imageColor'] as int),
-                      negotiable: item['negotiable'] as bool,
-                      textPrimary: textPrimary,
-                      textSecondary: textSecondary,
-                      onReport: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => ReportScreen(
-                              authService: authService,
-                              initialType: 'artwork',
-                              targetId: item['id'] as String,
-                              targetLabel: item['title'] as String,
                             ),
-                          ),
-                        );
-                      },
-                      onTap: () {
-                        Navigator.of(context).push(
-                          ArtDetailScreen.route(
-                            ArtDetailScreen(
-                              title: item['title'] as String,
-                              artist: item['artist'] as String,
-                              price: item['price'] as String,
-                              currency: item['currency'] as String,
-                              priceUsd: item['priceUsd'] as String?,
-                              imageUrl: item['imageUrl'] as String?,
-                              imageColor: Color(item['imageColor'] as int),
-                              negotiable: item['negotiable'] as bool,
-                            ),
-                          ),
-                        );
-                      },
-                    );
-                  },
-                  childCount: _mockListings.length,
+                          );
+                        },
+                        onBuy: isMine ? null : () => _buyListing(listingId),
+                        onCancel: canCancel
+                            ? () => _cancelListing(listingId)
+                            : null,
+                      );
+                    }, childCount: _listings.length),
+                  ),
                 ),
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -210,11 +632,7 @@ class MarketplaceScreen extends StatelessWidget {
 }
 
 class _Pill extends StatelessWidget {
-  const _Pill({
-    required this.icon,
-    required this.label,
-    required this.color,
-  });
+  const _Pill({required this.icon, required this.label, required this.color});
 
   final IconData icon;
   final String label;
@@ -237,9 +655,9 @@ class _Pill extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                  color: color,
-                  fontWeight: FontWeight.w600,
-                ),
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -253,28 +671,34 @@ class _ListingCard extends StatelessWidget {
     required this.artist,
     required this.price,
     required this.currency,
-    this.priceUsd,
     this.imageUrl,
     required this.imageColor,
     required this.negotiable,
+    required this.isMine,
+    required this.status,
     required this.textPrimary,
     required this.textSecondary,
     this.onTap,
     this.onReport,
+    this.onBuy,
+    this.onCancel,
   });
 
   final String title;
   final String artist;
   final String price;
   final String currency;
-  final String? priceUsd;
   final String? imageUrl;
   final Color imageColor;
   final bool negotiable;
+  final bool isMine;
+  final String status;
   final Color textPrimary;
   final Color textSecondary;
   final VoidCallback? onTap;
   final VoidCallback? onReport;
+  final VoidCallback? onBuy;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -286,232 +710,234 @@ class _ListingCard extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: AppColors.chainCyan.withOpacity(0.25),
-          width: 1,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.polygonPurple.withOpacity(0.15),
-            blurRadius: 20,
-            offset: const Offset(0, 6),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: AppColors.chainCyan.withOpacity(0.25),
+            width: 1,
           ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-          child: Container(
-            decoration: BoxDecoration(
-              color: cardBg.withOpacity(0.85),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: border.withOpacity(0.4),
-                width: 0.5,
-              ),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.polygonPurple.withOpacity(0.15),
+              blurRadius: 20,
+              offset: const Offset(0, 6),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Stack(
-                  children: [
-                    Container(
-                      height: 160,
-                      width: double.infinity,
-                      color: imageColor,
-                      child: imageUrl != null && imageUrl!.isNotEmpty
-                          ? CachedNetworkImage(
-                              imageUrl: imageUrl!,
-                              fit: BoxFit.cover,
-                              width: double.infinity,
-                              height: 160,
-                              placeholder: (_, __) => Center(
-                                child: Icon(
-                                  Icons.auto_awesome,
-                                  size: 48,
-                                  color: Colors.white.withOpacity(0.9),
-                                ),
-                              ),
-                              errorWidget: (_, __, ___) => Center(
-                                child: Icon(
-                                  Icons.auto_awesome,
-                                  size: 48,
-                                  color: Colors.white.withOpacity(0.9),
-                                ),
-                              ),
-                            )
-                          : Center(
-                              child: Icon(
-                                Icons.auto_awesome,
-                                size: 48,
-                                color: Colors.white.withOpacity(0.9),
-                              ),
-                            ),
-                    ),
-                    Positioned(
-                      top: 10,
-                      left: 10,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.nftAccent.withOpacity(0.9),
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.white24),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.token_rounded, size: 14, color: Colors.white),
-                            const SizedBox(width: 4),
-                            Text(
-                              'NFT',
-                              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                    letterSpacing: 0.5,
-                                  ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    // Report "!" button
-                    Positioned(
-                      bottom: 8,
-                      right: 8,
-                      child: GestureDetector(
-                        onTap: onReport,
-                        child: Container(
-                          width: 30,
-                          height: 30,
-                          decoration: BoxDecoration(
-                            color: Colors.black45,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.white24),
-                          ),
-                          child: const Center(
-                            child: Icon(
-                              Icons.report_rounded,
-                              size: 16,
-                              color: Colors.white70,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 10,
-                      right: 10,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.success.withOpacity(0.9),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          'Listed',
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w600,
-                              ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(20),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+            child: Container(
+              decoration: BoxDecoration(
+                color: cardBg.withOpacity(0.85),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: border.withOpacity(0.4), width: 0.5),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Stack(
                     children: [
-                      Text(
-                        title,
-                        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                              color: textPrimary,
-                              fontWeight: FontWeight.w700,
-                            ),
-                      ),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Icon(Icons.fingerprint_rounded, size: 14, color: textSecondary),
-                          const SizedBox(width: 6),
-                          Text(
-                            artist,
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: textSecondary,
-                                  fontFamily: 'monospace',
-                                ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          Icon(Icons.monetization_on_rounded, color: AppColors.ethGold, size: 20),
-                          const SizedBox(width: 6),
-                          Text(
-                            '$price $currency',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: AppColors.ethGold,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                          ),
-                          if (priceUsd != null && priceUsd!.isNotEmpty) ...[
-                            const SizedBox(width: 8),
-                            Text(
-                              priceUsd!,
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: textSecondary,
+                      Container(
+                        height: 160,
+                        width: double.infinity,
+                        color: imageColor,
+                        child: imageUrl != null && imageUrl!.isNotEmpty
+                            ? CachedNetworkImage(
+                                imageUrl: imageUrl!,
+                                fit: BoxFit.cover,
+                                width: double.infinity,
+                                height: 160,
+                                placeholder: (_, __) => const Center(
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
                                   ),
-                            ),
-                          ],
-                        ],
+                                ),
+                                errorWidget: (_, __, ___) => Center(
+                                  child: Icon(
+                                    Icons.auto_awesome,
+                                    size: 48,
+                                    color: Colors.white.withOpacity(0.9),
+                                  ),
+                                ),
+                              )
+                            : Center(
+                                child: Icon(
+                                  Icons.auto_awesome,
+                                  size: 48,
+                                  color: Colors.white.withOpacity(0.9),
+                                ),
+                              ),
                       ),
-                      const SizedBox(height: 14),
-                      Row(
-                        children: [
-                          Expanded(
-                            child: OutlinedButton.icon(
-                              onPressed: () {},
-                              icon: const Icon(Icons.shopping_bag_rounded, size: 18),
-                              label: const Text('Buy'),
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: AppColors.chainCyan,
-                                side: BorderSide(color: AppColors.chainCyan.withOpacity(0.7)),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            ),
+                      Positioned(
+                        top: 10,
+                        right: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
                           ),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: FilledButton.icon(
-                              onPressed: negotiable ? () {} : null,
-                              icon: const Icon(Icons.handshake_rounded, size: 18),
-                              label: Text(negotiable ? 'Negotiate' : 'Fixed'),
-                              style: FilledButton.styleFrom(
-                                backgroundColor: AppColors.ethGold,
-                                foregroundColor: Colors.black87,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
-                            ),
+                          decoration: BoxDecoration(
+                            color:
+                                (isMine
+                                        ? AppColors.polygonPurple
+                                        : AppColors.success)
+                                    .withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                        ],
+                          child: Text(
+                            isMine
+                                ? 'Your Listing · ${status.toUpperCase()}'
+                                : status.toUpperCase(),
+                            style: Theme.of(context).textTheme.labelSmall
+                                ?.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
-                ),
-              ],
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(
+                                color: textPrimary,
+                                fontWeight: FontWeight.w700,
+                              ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          artist,
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(color: textSecondary),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.monetization_on_rounded,
+                              color: AppColors.ethGold,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              '$price $currency',
+                              style: Theme.of(context).textTheme.titleMedium
+                                  ?.copyWith(
+                                    color: AppColors.ethGold,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: onBuy,
+                                icon: Icon(
+                                  isMine
+                                      ? Icons.verified_rounded
+                                      : Icons.shopping_bag_rounded,
+                                  size: 18,
+                                ),
+                                label: Text(isMine ? 'Owned' : 'Buy'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: AppColors.chainCyan,
+                                  side: BorderSide(
+                                    color: AppColors.chainCyan.withOpacity(0.7),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: FilledButton.icon(
+                                onPressed: negotiable
+                                    ? () {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          const SnackBar(
+                                            content: Text(
+                                              'Negotiation flow coming next phase',
+                                            ),
+                                          ),
+                                        );
+                                      }
+                                    : null,
+                                icon: const Icon(
+                                  Icons.handshake_rounded,
+                                  size: 18,
+                                ),
+                                label: Text(negotiable ? 'Negotiate' : 'Fixed'),
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: AppColors.ethGold,
+                                  foregroundColor: Colors.black87,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: onReport,
+                              child: Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: Colors.black38,
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(
+                                  Icons.report_rounded,
+                                  size: 18,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                            if (onCancel != null) ...[
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: onCancel,
+                                child: Container(
+                                  width: 36,
+                                  height: 36,
+                                  decoration: BoxDecoration(
+                                    color: AppColors.error.withOpacity(0.2),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: const Icon(
+                                    Icons.close_rounded,
+                                    size: 18,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-      ),
       ),
     );
   }
