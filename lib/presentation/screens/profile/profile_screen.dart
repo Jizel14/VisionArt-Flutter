@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shimmer/shimmer.dart';
+import '../../../core/models/user_model.dart';
 import '../../../core/auth_service.dart';
 import '../../../core/api_client.dart';
 import '../../../core/preference_storage.dart';
@@ -12,6 +13,8 @@ import '../report/report_screen.dart';
 import '../splash/widgets/smoke_background.dart';
 import '../signature/signature_editor_screen.dart';
 import 'edit_profile_screen.dart';
+import 'profile_artworks_overview_screen.dart';
+import 'profile_inspect_screen.dart';
 
 Future<void> _showDeleteAccountDialog(
   BuildContext context,
@@ -121,6 +124,62 @@ class ProfileScreen extends StatelessWidget {
       'Dec',
     ];
     return '${months[date.month - 1]} ${date.year}';
+  }
+
+  UserModel _buildCurrentUserModel(String userId) {
+    final now = DateTime.now();
+    return UserModel(
+      id: userId,
+      name: userName,
+      email: userEmail,
+      bio: userBio,
+      avatarUrl: avatarUrl,
+      isVerified: false,
+      isPrivateAccount: false,
+      followersCount: followersCount,
+      followingCount: followingCount,
+      publicGenerationsCount: artworksCount,
+      createdAt: createdAt ?? now,
+      updatedAt: now,
+    );
+  }
+
+  Future<void> _openInspectProfile(BuildContext context) async {
+    final currentUserId = AuthService.currentUserId;
+    if (currentUserId == null || currentUserId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to open inspect profile now.')),
+      );
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProfileInspectScreen(
+          userId: currentUserId,
+          initialUser: _buildCurrentUserModel(currentUserId),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openMyArtworks(BuildContext context) async {
+    final currentUserId = AuthService.currentUserId;
+    if (currentUserId == null || currentUserId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to open your artworks now.')),
+      );
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProfileArtworksOverviewScreen(
+          userId: currentUserId,
+          userName: userName,
+        ),
+      ),
+    );
   }
 
   @override
@@ -344,6 +403,50 @@ class ProfileScreen extends StatelessWidget {
                   const SnackBar(content: Text('Profile updated')),
                 );
               },
+            ),
+          ),
+          const SizedBox(height: 12),
+          _GlassCard(
+            child: ListTile(
+              leading: Icon(
+                Icons.person_search_rounded,
+                color: AppColors.lightBlue,
+              ),
+              title: Text(
+                'Inspect profile',
+                style: TextStyle(
+                  color: textPrimary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              subtitle: Text(
+                'Open your public profile view with gallery and followers',
+                style: TextStyle(color: textSecondary, fontSize: 12),
+              ),
+              trailing: Icon(Icons.chevron_right, color: textSecondary),
+              onTap: () => _openInspectProfile(context),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _GlassCard(
+            child: ListTile(
+              leading: Icon(
+                Icons.photo_library_rounded,
+                color: AppColors.nftAccent,
+              ),
+              title: Text(
+                'My artworks and purchases',
+                style: TextStyle(
+                  color: textPrimary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              subtitle: Text(
+                'See owned artworks and the artworks you bought',
+                style: TextStyle(color: textSecondary, fontSize: 12),
+              ),
+              trailing: Icon(Icons.chevron_right, color: textSecondary),
+              onTap: () => _openMyArtworks(context),
             ),
           ),
           const SizedBox(height: 12),
