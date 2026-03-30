@@ -190,6 +190,7 @@ class _MarketplaceBalanceScreenState extends State<MarketplaceBalanceScreen> {
     final addrController = TextEditingController();
     final refController = TextEditingController();
     final txHashController = TextEditingController();
+    String selectedTokenType = 'POL';
 
     await showDialog<void>(
       context: context,
@@ -215,6 +216,23 @@ class _MarketplaceBalanceScreenState extends State<MarketplaceBalanceScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Destination wallet (optional)',
                 ),
+              ),
+              const SizedBox(height: 10),
+              StatefulBuilder(
+                builder: (context, setState) {
+                  return SegmentedButton<String>(
+                    segments: const [
+                      ButtonSegment(label: Text('POL'), value: 'POL'),
+                      ButtonSegment(label: Text('USDC'), value: 'USDC'),
+                    ],
+                    selected: {selectedTokenType},
+                    onSelectionChanged: (Set<String> newSelection) {
+                      setState(() {
+                        selectedTokenType = newSelection.first;
+                      });
+                    },
+                  );
+                },
               ),
               const SizedBox(height: 10),
               TextField(
@@ -264,15 +282,18 @@ class _MarketplaceBalanceScreenState extends State<MarketplaceBalanceScreen> {
                     txHash: txHashController.text.trim().isEmpty
                         ? null
                         : txHashController.text.trim(),
+                    tokenType: selectedTokenType,
                   );
                   if (!mounted) return;
                   final txHash = (result['txHash'] ?? '').toString();
+                  final token = (result['tokenType'] ?? selectedTokenType)
+                      .toString();
                   ScaffoldMessenger.of(pageContext).showSnackBar(
                     SnackBar(
                       content: Text(
                         txHash.isNotEmpty
-                            ? 'Withdraw sent on-chain: $txHash'
-                            : 'Withdraw completed',
+                            ? 'Withdraw sent on-chain ($token): $txHash'
+                            : 'Withdraw completed ($token)',
                       ),
                     ),
                   );

@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'dart:ui';
 
 import 'package:cached_network_image/cached_network_image.dart';
@@ -13,6 +15,7 @@ import '../report/report_screen.dart';
 import '../splash/widgets/smoke_background.dart';
 import 'art_detail_screen.dart';
 import 'marketplace_balance_screen.dart';
+import 'marketplace_negotiations_screen.dart';
 
 class MarketplaceScreen extends StatefulWidget {
   const MarketplaceScreen({super.key, required this.authService});
@@ -34,6 +37,10 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
 
   Map<String, dynamic>? _walletData;
   bool _isLoadingWallet = false;
+  bool _isLoadingNegotiations = false;
+  int _pendingNegotiationCount = 0;
+  Map<String, Map<String, dynamic>> _myOpenNegotiationsByListing =
+      <String, Map<String, dynamic>>{};
 
   @override
   void initState() {
@@ -42,7 +49,98 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
   }
 
   Future<void> _loadInitial() async {
-    await Future.wait([_loadListings(), _loadWallet()]);
+    await Future.wait([
+      _loadListings(),
+      _loadWallet(),
+      _loadPendingNegotiationCount(),
+      _loadMyOpenNegotiationsByListing(),
+    ]);
+  }
+
+  Future<void> _loadMyOpenNegotiationsByListing() async {
+    try {
+      final result = await _marketplaceService.getMyNegotiations(
+        status: 'all',
+        limit: 200,
+      );
+      final rows = (result['data'] as List<dynamic>? ?? const <dynamic>[])
+          .cast<Map<String, dynamic>>();
+
+      final nextMap = <String, Map<String, dynamic>>{};
+      for (final row in rows) {
+        final isRequester = row['isRequester'] == true;
+        if (!isRequester) continue;
+
+        final status = (row['status'] ?? '').toString().toLowerCase();
+        if (status != 'pending' && status != 'accepted') continue;
+
+        final listingId = (row['listingId'] ?? '').toString();
+        if (listingId.isEmpty) continue;
+
+        final previous = nextMap[listingId];
+        if (previous == null) {
+          nextMap[listingId] = row;
+          continue;
+        }
+
+        final prevUpdated = DateTime.tryParse(
+          (previous['updatedAt'] ?? '').toString(),
+        );
+        final currUpdated = DateTime.tryParse(
+          (row['updatedAt'] ?? '').toString(),
+        );
+        if (prevUpdated == null ||
+            (currUpdated != null && currUpdated.isAfter(prevUpdated))) {
+          nextMap[listingId] = row;
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _myOpenNegotiationsByListing = nextMap;
+      });
+    } catch (_) {
+      // Keep silent if this hint data fails to load.
+    }
+  }
+
+  Future<void> _loadPendingNegotiationCount() async {
+    try {
+      await MarketplaceService.ensureSeenLoaded();
+
+      final result = await _marketplaceService.getMyNegotiations(
+        status: 'all',
+        limit: 100,
+      );
+      final rows = (result['data'] as List<dynamic>? ?? const <dynamic>[])
+          .cast<Map<String, dynamic>>();
+      await MarketplaceService.markNegotiationsBaseline(rows);
+
+      final attentionIds = <String>{};
+      for (final item in rows) {
+        final negotiationId = (item['id'] ?? '').toString();
+        if (negotiationId.isEmpty) continue;
+
+        final status = (item['status'] ?? '').toString().toLowerCase();
+        final isRequester = item['isRequester'] == true;
+
+        if (status == 'pending' && !isRequester) {
+          attentionIds.add(negotiationId);
+          continue;
+        }
+
+        if (MarketplaceService.isNegotiationUnread(item)) {
+          attentionIds.add(negotiationId);
+        }
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _pendingNegotiationCount = attentionIds.length;
+      });
+    } catch (_) {
+      // Keep silent for badge load failures.
+    }
   }
 
   Future<void> _loadWallet() async {
@@ -100,7 +198,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     await _loadWallet();
   }
 
-  Future<void> _buyListing(String listingId) async {
+  Future<void> _buyListing(
+    String listingId, {
+    String? negotiationId,
+    double? negotiatedAmount,
+  }) async {
     final pageContext = context;
     final txHashController = TextEditingController();
 
@@ -108,13 +210,34 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Confirm purchase'),
-          content: TextField(
-            controller: txHashController,
-            decoration: const InputDecoration(
-              labelText: 'Transaction hash (optional)',
-              hintText: '0x...',
-            ),
+          title: Text(
+            negotiationId == null
+                ? 'Confirm purchase'
+                : 'Buy at negotiated price',
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (negotiatedAmount != null)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Negotiated price: ${_money(negotiatedAmount)}',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: AppColors.ethGold,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              if (negotiatedAmount != null) const SizedBox(height: 12),
+              TextField(
+                controller: txHashController,
+                decoration: const InputDecoration(
+                  labelText: 'Transaction hash (optional)',
+                  hintText: '0x...',
+                ),
+              ),
+            ],
           ),
           actions: [
             TextButton(
@@ -130,6 +253,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                 try {
                   await _marketplaceService.buyListing(
                     listingId,
+                    negotiationId: negotiationId,
                     txHash: txHash,
                   );
                   if (!mounted) return;
@@ -188,6 +312,128 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
         context,
       ).showSnackBar(SnackBar(content: Text('Unable to cancel listing: $e')));
     }
+  }
+
+  Future<void> _requestNegotiation(Map<String, dynamic> listing) async {
+    final pageContext = context;
+    final amountController = TextEditingController();
+    final messageController = TextEditingController();
+
+    final listedPrice = double.tryParse('${listing['price']}') ?? 0;
+    if (listedPrice > 0) {
+      amountController.text = listedPrice.toStringAsFixed(2);
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Send negotiation request'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: amountController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'Your offer amount',
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                controller: messageController,
+                maxLines: 3,
+                decoration: const InputDecoration(
+                  labelText: 'Message (optional)',
+                  hintText: 'Hi, can you accept this offer?',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final amount = double.tryParse(amountController.text.trim());
+                if (amount == null || amount <= 0) {
+                  ScaffoldMessenger.of(pageContext).showSnackBar(
+                    const SnackBar(content: Text('Enter a valid amount')),
+                  );
+                  return;
+                }
+
+                Navigator.of(context).pop();
+                try {
+                  await _marketplaceService.requestNegotiation(
+                    listingId: (listing['id'] ?? '').toString(),
+                    amount: amount,
+                    message: messageController.text.trim().isEmpty
+                        ? null
+                        : messageController.text.trim(),
+                  );
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(pageContext).showSnackBar(
+                    const SnackBar(content: Text('Negotiation request sent')),
+                  );
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(pageContext).showSnackBar(
+                    SnackBar(content: Text('Failed to send request: $e')),
+                  );
+                }
+              },
+              child: const Text('Send request'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _openOrCreateNegotiation(Map<String, dynamic> listing) async {
+    final listingId = (listing['id'] ?? '').toString();
+    if (listingId.isEmpty) return;
+
+    final existing = _myOpenNegotiationsByListing[listingId];
+    if (existing == null) {
+      await _requestNegotiation(listing);
+      await _loadMyOpenNegotiationsByListing();
+      return;
+    }
+
+    final status = (existing['status'] ?? '').toString().toLowerCase();
+    if (status == 'accepted') {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => MarketplaceNegotiationChatScreen(
+            service: _marketplaceService,
+            negotiation: existing,
+          ),
+        ),
+      );
+      await _loadInitial();
+      return;
+    }
+
+    await _openNegotiationsInbox();
+  }
+
+  Future<void> _openNegotiationsInbox() async {
+    setState(() => _isLoadingNegotiations = true);
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) =>
+            MarketplaceNegotiationsScreen(service: _marketplaceService),
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _isLoadingNegotiations = false);
+    await _loadInitial();
   }
 
   Future<void> _showListArtworkSheet() async {
@@ -254,7 +500,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<ArtworkModel>(
-                      value: selected,
+                      initialValue: selected,
                       items: myArtworks
                           .map(
                             (artwork) => DropdownMenuItem<ArtworkModel>(
@@ -285,7 +531,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                     ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
-                      value: currency,
+                      initialValue: currency,
                       items: const [
                         DropdownMenuItem(value: 'USDC', child: Text('USDC')),
                         DropdownMenuItem(value: 'POL', child: Text('POL')),
@@ -397,13 +643,13 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                             decoration: BoxDecoration(
                               gradient: LinearGradient(
                                 colors: [
-                                  AppColors.ethGold.withOpacity(0.3),
-                                  AppColors.chainCyan.withOpacity(0.2),
+                                  AppColors.ethGold.withValues(alpha: 0.3),
+                                  AppColors.chainCyan.withValues(alpha: 0.2),
                                 ],
                               ),
                               borderRadius: BorderRadius.circular(14),
                               border: Border.all(
-                                color: AppColors.ethGold.withOpacity(0.5),
+                                color: AppColors.ethGold.withValues(alpha: 0.5),
                                 width: 1,
                               ),
                             ),
@@ -433,8 +679,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                                   'Buy & sell AI art · Live market actions',
                                   style: Theme.of(context).textTheme.bodySmall
                                       ?.copyWith(
-                                        color: AppColors.chainCyan.withOpacity(
-                                          0.95,
+                                        color: AppColors.chainCyan.withValues(
+                                          alpha: 0.95,
                                         ),
                                         letterSpacing: 0.5,
                                       ),
@@ -462,6 +708,52 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                             icon: const Icon(
                               Icons.account_balance_wallet_rounded,
                             ),
+                          ),
+                          const SizedBox(width: 6),
+                          Stack(
+                            clipBehavior: Clip.none,
+                            children: [
+                              IconButton.filledTonal(
+                                onPressed: _isLoadingNegotiations
+                                    ? null
+                                    : _openNegotiationsInbox,
+                                tooltip: 'Negotiations',
+                                icon: _isLoadingNegotiations
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Icon(Icons.forum_rounded),
+                              ),
+                              if (_pendingNegotiationCount > 0)
+                                Positioned(
+                                  right: 2,
+                                  top: 2,
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.error,
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: Text(
+                                      _pendingNegotiationCount > 9
+                                          ? '9+'
+                                          : '$_pendingNegotiationCount',
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           ),
                           const SizedBox(width: 6),
                           IconButton.filled(
@@ -569,6 +861,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                           isMine &&
                           isActive &&
                           (status == 'listed' || status == 'listed_onchain');
+                      final existingNegotiation =
+                          _myOpenNegotiationsByListing[listingId];
 
                       return _ListingCard(
                         title: (artwork['title'] ?? 'Untitled artwork')
@@ -616,6 +910,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                           );
                         },
                         onBuy: isMine ? null : () => _buyListing(listingId),
+                        onNegotiate: (!isMine && negotiable)
+                            ? () => _openOrCreateNegotiation(item)
+                            : null,
+                        negotiateLabel: (!isMine && negotiable)
+                            ? (existingNegotiation != null
+                                  ? 'Continue'
+                                  : 'Negotiate')
+                            : null,
                         onCancel: canCancel
                             ? () => _cancelListing(listingId)
                             : null,
@@ -643,9 +945,9 @@ class _Pill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withOpacity(0.4)),
+        border: Border.all(color: color.withValues(alpha: 0.4)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -681,6 +983,8 @@ class _ListingCard extends StatelessWidget {
     this.onTap,
     this.onReport,
     this.onBuy,
+    this.onNegotiate,
+    this.negotiateLabel,
     this.onCancel,
   });
 
@@ -698,6 +1002,8 @@ class _ListingCard extends StatelessWidget {
   final VoidCallback? onTap;
   final VoidCallback? onReport;
   final VoidCallback? onBuy;
+  final VoidCallback? onNegotiate;
+  final String? negotiateLabel;
   final VoidCallback? onCancel;
 
   @override
@@ -712,12 +1018,12 @@ class _ListingCard extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: AppColors.chainCyan.withOpacity(0.25),
+            color: AppColors.chainCyan.withValues(alpha: 0.25),
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: AppColors.polygonPurple.withOpacity(0.15),
+              color: AppColors.polygonPurple.withValues(alpha: 0.15),
               blurRadius: 20,
               offset: const Offset(0, 6),
             ),
@@ -729,9 +1035,12 @@ class _ListingCard extends StatelessWidget {
             filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
             child: Container(
               decoration: BoxDecoration(
-                color: cardBg.withOpacity(0.85),
+                color: cardBg.withValues(alpha: 0.85),
                 borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: border.withOpacity(0.4), width: 0.5),
+                border: Border.all(
+                  color: border.withValues(alpha: 0.4),
+                  width: 0.5,
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -748,16 +1057,16 @@ class _ListingCard extends StatelessWidget {
                                 fit: BoxFit.cover,
                                 width: double.infinity,
                                 height: 160,
-                                placeholder: (_, __) => const Center(
+                                placeholder: (context, url) => const Center(
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
                                   ),
                                 ),
-                                errorWidget: (_, __, ___) => Center(
+                                errorWidget: (context, url, error) => Center(
                                   child: Icon(
                                     Icons.auto_awesome,
                                     size: 48,
-                                    color: Colors.white.withOpacity(0.9),
+                                    color: Colors.white.withValues(alpha: 0.9),
                                   ),
                                 ),
                               )
@@ -765,7 +1074,7 @@ class _ListingCard extends StatelessWidget {
                                 child: Icon(
                                   Icons.auto_awesome,
                                   size: 48,
-                                  color: Colors.white.withOpacity(0.9),
+                                  color: Colors.white.withValues(alpha: 0.9),
                                 ),
                               ),
                       ),
@@ -782,7 +1091,7 @@ class _ListingCard extends StatelessWidget {
                                 (isMine
                                         ? AppColors.polygonPurple
                                         : AppColors.success)
-                                    .withOpacity(0.9),
+                                    .withValues(alpha: 0.9),
                             borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
@@ -854,7 +1163,9 @@ class _ListingCard extends StatelessWidget {
                                 style: OutlinedButton.styleFrom(
                                   foregroundColor: AppColors.chainCyan,
                                   side: BorderSide(
-                                    color: AppColors.chainCyan.withOpacity(0.7),
+                                    color: AppColors.chainCyan.withValues(
+                                      alpha: 0.7,
+                                    ),
                                   ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
@@ -865,24 +1176,18 @@ class _ListingCard extends StatelessWidget {
                             const SizedBox(width: 10),
                             Expanded(
                               child: FilledButton.icon(
-                                onPressed: negotiable
-                                    ? () {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          const SnackBar(
-                                            content: Text(
-                                              'Negotiation flow coming next phase',
-                                            ),
-                                          ),
-                                        );
-                                      }
-                                    : null,
+                                onPressed: negotiable ? onNegotiate : null,
                                 icon: const Icon(
                                   Icons.handshake_rounded,
                                   size: 18,
                                 ),
-                                label: Text(negotiable ? 'Negotiate' : 'Fixed'),
+                                label: Text(
+                                  negotiable
+                                      ? (isMine
+                                            ? 'Negotiable'
+                                            : (negotiateLabel ?? 'Negotiate'))
+                                      : 'Fixed',
+                                ),
                                 style: FilledButton.styleFrom(
                                   backgroundColor: AppColors.ethGold,
                                   foregroundColor: Colors.black87,
@@ -917,7 +1222,9 @@ class _ListingCard extends StatelessWidget {
                                   width: 36,
                                   height: 36,
                                   decoration: BoxDecoration(
-                                    color: AppColors.error.withOpacity(0.2),
+                                    color: AppColors.error.withValues(
+                                      alpha: 0.2,
+                                    ),
                                     borderRadius: BorderRadius.circular(10),
                                   ),
                                   child: const Icon(
