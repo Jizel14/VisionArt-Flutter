@@ -211,10 +211,11 @@ class MarketplaceService {
   Future<Map<String, dynamic>> getMyListings({
     int page = 1,
     int limit = 20,
+    String role = 'seller',
   }) async {
     final response = await ApiClient.instance.get(
       '/marketplace/my/listings',
-      queryParameters: {'page': page, 'limit': limit},
+      queryParameters: {'page': page, 'limit': limit, 'role': role},
     );
     return Map<String, dynamic>.from(response.data as Map);
   }
@@ -236,6 +237,21 @@ class MarketplaceService {
         'negotiable': negotiable,
         if (paymentToken != null) 'paymentToken': paymentToken,
         if (txHash != null) 'txHash': txHash,
+      },
+    );
+    return Map<String, dynamic>.from(response.data as Map);
+  }
+
+  Future<Map<String, dynamic>> updateListing({
+    required String listingId,
+    double? price,
+    bool? negotiable,
+  }) async {
+    final response = await ApiClient.instance.patch(
+      '/marketplace/listings/$listingId',
+      data: {
+        if (price != null) 'price': price,
+        if (negotiable != null) 'negotiable': negotiable,
       },
     );
     return Map<String, dynamic>.from(response.data as Map);
