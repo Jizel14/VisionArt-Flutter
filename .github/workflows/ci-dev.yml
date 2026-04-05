@@ -1,0 +1,52 @@
+name: CI – dev
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  docker-build:
+    name: Build & push Docker image (dev)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter (analyze only – fast)
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies & analyze
+        run: |
+          flutter pub get
+          flutter analyze --no-fatal-infos
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: production
+          push: true
+          build-args: |
+            VISIONCRAFT_API_KEY=${{ secrets.VISIONCRAFT_API_KEY }}
+            GOOGLE_WEB_CLIENT_ID=${{ secrets.GOOGLE_WEB_CLIENT_ID }}
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/visionart-flutter:dev
+            ghcr.io/${{ github.repository_owner }}/visionart-flutter:dev-${{ github.sha }}
