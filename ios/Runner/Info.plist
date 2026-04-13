@@ -57,5 +57,7 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Allow VisionArt to access your photo library to upload stories.</string>
 </dict>
 </plist>
