@@ -366,6 +366,13 @@ class MarketplaceService {
     return Map<String, dynamic>.from(response.data as Map);
   }
 
+  Future<Map<String, dynamic>> getSellerAnalytics() async {
+    final response = await ApiClient.instance.get(
+      '/marketplace/analytics/seller',
+    );
+    return Map<String, dynamic>.from(response.data as Map);
+  }
+
   Future<Map<String, dynamic>> getBlockchainProof() async {
     final response = await ApiClient.instance.get(
       '/marketplace/blockchain/proof',
