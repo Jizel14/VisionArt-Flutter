@@ -211,7 +211,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
     double? negotiatedAmount,
   }) async {
     final pageContext = context;
-    final txHashController = TextEditingController();
 
     await showDialog<void>(
       context: context,
@@ -237,13 +236,6 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   ),
                 ),
               if (negotiatedAmount != null) const SizedBox(height: 12),
-              TextField(
-                controller: txHashController,
-                decoration: const InputDecoration(
-                  labelText: 'Transaction hash (optional)',
-                  hintText: '0x...',
-                ),
-              ),
             ],
           ),
           actions: [
@@ -253,15 +245,11 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
             ),
             FilledButton(
               onPressed: () async {
-                final txHash = txHashController.text.trim().isEmpty
-                    ? null
-                    : txHashController.text.trim();
                 Navigator.of(context).pop();
                 try {
                   await _marketplaceService.buyListing(
                     listingId,
                     negotiationId: negotiationId,
-                    txHash: txHash,
                   );
                   if (!mounted) return;
                   ScaffoldMessenger.of(pageContext).showSnackBar(
@@ -768,6 +756,8 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                               children: [
                                 Text(
                                   'Marketplace',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: Theme.of(context)
                                       .textTheme
                                       .headlineSmall
@@ -779,23 +769,30 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                                 const SizedBox(height: 2),
                                 Text(
                                   'Buy & sell AI art · Live market actions',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                   style: Theme.of(context).textTheme.bodySmall
                                       ?.copyWith(
                                         color: AppColors.chainCyan.withValues(
                                           alpha: 0.95,
                                         ),
                                         letterSpacing: 0.5,
+                                        height: 1.25,
                                       ),
                                 ),
                                 const SizedBox(height: 8),
                                 if (_isLoadingWallet)
                                   Text(
                                     'Loading wallet…',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: TextStyle(color: textSecondary),
                                   )
                                 else
                                   Text(
                                     'Balance: ${_money(wallet?['availableBalance'])} ${wallet?['currency'] ?? 'USDC'}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                     style: TextStyle(
                                       color: AppColors.ethGold,
                                       fontWeight: FontWeight.w700,
@@ -872,47 +869,38 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
               SliverToBoxAdapter(
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(24, 8, 24, 16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          _Pill(
-                            icon: Icons.sell_rounded,
-                            label: '${_listings.length} active listings',
-                            color: AppColors.success,
-                          ),
-                          const SizedBox(width: 10),
-                          const _Pill(
-                            icon: Icons.account_balance_wallet_rounded,
-                            label: 'Wallet enabled',
-                            color: AppColors.ethGold,
-                          ),
-                        ],
+                  child: Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: context.cardBackgroundColor.withValues(
+                        alpha: 0.55,
                       ),
-                      const SizedBox(height: 12),
-                      SegmentedButton<bool>(
-                        segments: const [
-                          ButtonSegment<bool>(
-                            value: false,
-                            label: Text('All Listings'),
-                            icon: Icon(Icons.public_rounded),
-                          ),
-                          ButtonSegment<bool>(
-                            value: true,
-                            label: Text('My Listings'),
-                            icon: Icon(Icons.person_rounded),
-                          ),
-                        ],
-                        selected: {_showMyListings},
-                        onSelectionChanged: (selection) async {
-                          final selected = selection.first;
-                          if (_showMyListings == selected) return;
-                          setState(() => _showMyListings = selected);
-                          await _loadListings();
-                        },
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: context.borderColor.withValues(alpha: 0.35),
                       ),
-                    ],
+                    ),
+                    child: SegmentedButton<bool>(
+                      segments: const [
+                        ButtonSegment<bool>(
+                          value: false,
+                          label: Text('All Listings'),
+                          icon: Icon(Icons.public_rounded),
+                        ),
+                        ButtonSegment<bool>(
+                          value: true,
+                          label: Text('My Listings'),
+                          icon: Icon(Icons.person_rounded),
+                        ),
+                      ],
+                      selected: {_showMyListings},
+                      onSelectionChanged: (selection) async {
+                        final selected = selection.first;
+                        if (_showMyListings == selected) return;
+                        setState(() => _showMyListings = selected);
+                        await _loadListings();
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -942,136 +930,113 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                   ),
                 )
               else
-                SliverPadding(
-                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate((context, index) {
-                      final item = _listings[index];
-                      final artwork =
-                          item['artwork'] as Map<String, dynamic>? ??
-                          <String, dynamic>{};
-                      final seller =
-                          item['seller'] as Map<String, dynamic>? ??
-                          <String, dynamic>{};
-
-                      final listingId = (item['id'] ?? '').toString();
-                      final isMine = _asBool(item['isMine']);
-                      final negotiable = _asBool(item['negotiable']);
-                      final isActive = _asBool(item['isActive']);
-                      final status = (item['status'] ?? '').toString();
-                      final canCancel =
-                          isMine &&
-                          isActive &&
-                          (status == 'listed' || status == 'listed_onchain');
-                      final canEdit = canCancel;
-                      final existingNegotiation =
-                          _myOpenNegotiationsByListing[listingId];
-
-                      final sellerName = (seller['name'] ?? '')
-                          .toString()
-                          .trim();
-                      final artistLabel = sellerName.isNotEmpty
-                          ? sellerName
-                          : (isMine ? 'You' : 'Unknown artist');
-
-                      return _ListingCard(
-                        title: (artwork['title'] ?? 'Untitled artwork')
-                            .toString(),
-                        artist: artistLabel,
-                        price: _money(item['price']),
-                        currency: (item['currency'] ?? 'USDC').toString(),
-                        imageUrl: artwork['imageUrl']?.toString(),
-                        imageColor: AppColors.polygonPurple,
-                        negotiable: negotiable,
-                        isMine: isMine,
-                        status: status,
-                        textPrimary: textPrimary,
-                        textSecondary: textSecondary,
-                        onReport: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => ReportScreen(
-                                authService: widget.authService,
-                                initialType: 'artwork',
-                                targetId: listingId,
-                                targetLabel: (artwork['title'] ?? 'Artwork')
-                                    .toString(),
-                              ),
-                            ),
-                          );
-                        },
-                        onTap: () {
-                          Navigator.of(context).push(
-                            ArtDetailScreen.route(
-                              ArtDetailScreen(
-                                title: (artwork['title'] ?? 'Untitled artwork')
-                                    .toString(),
-                                artist: artistLabel,
-                                price: _money(item['price']),
-                                currency: (item['currency'] ?? 'USDC')
-                                    .toString(),
-                                priceUsd: null,
-                                imageUrl: artwork['imageUrl']?.toString(),
-                                imageColor: AppColors.polygonPurple,
-                                negotiable: negotiable,
-                              ),
-                            ),
-                          );
-                        },
-                        onBuy: isMine ? null : () => _buyListing(listingId),
-                        onNegotiate: (!isMine && negotiable)
-                            ? () => _openOrCreateNegotiation(item)
-                            : null,
-                        negotiateLabel: (!isMine && negotiable)
-                            ? (existingNegotiation != null
-                                  ? 'Continue'
-                                  : 'Negotiate')
-                            : null,
-                        onCancel: canCancel
-                            ? () => _cancelListing(listingId)
-                            : null,
-                        onEdit: canEdit ? () => _editListing(item) : null,
-                      );
-                    }, childCount: _listings.length),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                    child: Text(
+                      _showMyListings
+                          ? 'Manage your listings below. Edit terms or cancel items that are still live.'
+                          : 'Browse live listings. Negotiable items can be discussed before buying.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: textSecondary,
+                        height: 1.35,
+                      ),
+                    ),
                   ),
                 ),
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 100),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate((context, index) {
+                    final item = _listings[index];
+                    final artwork =
+                        item['artwork'] as Map<String, dynamic>? ??
+                        <String, dynamic>{};
+                    final seller =
+                        item['seller'] as Map<String, dynamic>? ??
+                        <String, dynamic>{};
+
+                    final listingId = (item['id'] ?? '').toString();
+                    final isMine = _asBool(item['isMine']);
+                    final negotiable = _asBool(item['negotiable']);
+                    final isActive = _asBool(item['isActive']);
+                    final status = (item['status'] ?? '').toString();
+                    final canCancel =
+                        isMine &&
+                        isActive &&
+                        (status == 'listed' || status == 'listed_onchain');
+                    final canEdit = canCancel;
+                    final existingNegotiation =
+                        _myOpenNegotiationsByListing[listingId];
+
+                    final sellerName = (seller['name'] ?? '').toString().trim();
+                    final artistLabel = sellerName.isNotEmpty
+                        ? sellerName
+                        : (isMine ? 'You' : 'Unknown artist');
+
+                    return _ListingCard(
+                      title: (artwork['title'] ?? 'Untitled artwork')
+                          .toString(),
+                      artist: artistLabel,
+                      price: _money(item['price']),
+                      currency: (item['currency'] ?? 'USDC').toString(),
+                      imageUrl: artwork['imageUrl']?.toString(),
+                      imageColor: AppColors.polygonPurple,
+                      negotiable: negotiable,
+                      isMine: isMine,
+                      status: status,
+                      textPrimary: textPrimary,
+                      textSecondary: textSecondary,
+                      onReport: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ReportScreen(
+                              authService: widget.authService,
+                              initialType: 'artwork',
+                              targetId: listingId,
+                              targetLabel: (artwork['title'] ?? 'Artwork')
+                                  .toString(),
+                            ),
+                          ),
+                        );
+                      },
+                      onTap: () {
+                        Navigator.of(context).push(
+                          ArtDetailScreen.route(
+                            ArtDetailScreen(
+                              title: (artwork['title'] ?? 'Untitled artwork')
+                                  .toString(),
+                              artist: artistLabel,
+                              price: _money(item['price']),
+                              currency: (item['currency'] ?? 'USDC').toString(),
+                              priceUsd: null,
+                              imageUrl: artwork['imageUrl']?.toString(),
+                              imageColor: AppColors.polygonPurple,
+                              negotiable: negotiable,
+                            ),
+                          ),
+                        );
+                      },
+                      onBuy: isMine ? null : () => _buyListing(listingId),
+                      onNegotiate: (!isMine && negotiable)
+                          ? () => _openOrCreateNegotiation(item)
+                          : null,
+                      negotiateLabel: (!isMine && negotiable)
+                          ? (existingNegotiation != null
+                                ? 'Continue'
+                                : 'Negotiate')
+                          : null,
+                      onCancel: canCancel
+                          ? () => _cancelListing(listingId)
+                          : null,
+                      onEdit: canEdit ? () => _editListing(item) : null,
+                    );
+                  }, childCount: _listings.length),
+                ),
+              ),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _Pill extends StatelessWidget {
-  const _Pill({required this.icon, required this.label, required this.color});
-
-  final IconData icon;
-  final String label;
-  final Color color;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.4)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16, color: color),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: color,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
       ),
     );
   }
