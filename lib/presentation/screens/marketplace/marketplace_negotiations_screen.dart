@@ -1,9 +1,7 @@
 // ignore_for_file: use_build_context_synchronously
 
 import 'dart:async';
-
 import 'package:flutter/material.dart';
-
 import '../../../core/services/marketplace_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
@@ -180,8 +178,6 @@ class _MarketplaceNegotiationsScreenState
     String negotiationId,
     dynamic latestAmount,
   ) async {
-    final txHashController = TextEditingController();
-
     await showDialog<void>(
       context: context,
       builder: (context) {
@@ -198,14 +194,6 @@ class _MarketplaceNegotiationsScreenState
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: txHashController,
-                decoration: const InputDecoration(
-                  labelText: 'Transaction hash (optional)',
-                  hintText: '0x...',
-                ),
-              ),
             ],
           ),
           actions: [
@@ -215,15 +203,11 @@ class _MarketplaceNegotiationsScreenState
             ),
             FilledButton(
               onPressed: () async {
-                final txHash = txHashController.text.trim().isEmpty
-                    ? null
-                    : txHashController.text.trim();
                 Navigator.of(context).pop();
                 try {
                   await widget.service.buyListing(
                     listingId,
                     negotiationId: negotiationId,
-                    txHash: txHash,
                   );
                   if (!mounted) return;
                   ScaffoldMessenger.of(context).showSnackBar(
