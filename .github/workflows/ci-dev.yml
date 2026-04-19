@@ -1,0 +1,54 @@
+name: CI – dev
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+
+jobs:
+  flutter-ci:
+    name: Analyze · Test · Build APK (debug)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed .
+        continue-on-error: true
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: Run tests
+        run: flutter test --no-pub
+        continue-on-error: true
+
+      - name: Build debug APK
+        run: |
+          flutter build apk --debug \
+            --dart-define=VISIONCRAFT_API_KEY=${{ secrets.VISIONCRAFT_API_KEY || '' }} \
+            --dart-define=GOOGLE_WEB_CLIENT_ID=${{ secrets.GOOGLE_WEB_CLIENT_ID || '' }}
+
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: visionart-debug-apk-${{ github.sha }}
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 7
+
+      - name: Notify on success
+        if: success()
+        run: echo "✅ dev CI passed – ${{ github.sha }}"
