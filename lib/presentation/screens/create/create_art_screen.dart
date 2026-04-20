@@ -4,6 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_vision_craft/flutter_vision_craft.dart';
 
 import '../../../core/visioncraft_service.dart';
+import '../../../features/subscription/models/subscription_model.dart';
+import '../../../features/subscription/services/subscription_service.dart';
+import '../../../features/subscription/widgets/quota_banner_widget.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
 import '../splash/widgets/smoke_background.dart';
@@ -26,10 +29,22 @@ class _CreateArtScreenState extends State<CreateArtScreen> {
   Uint8List? _generatedImage;
   AIStyles _selectedStyle = AIStyles.abstract;
 
+  SubscriptionModel? _subscription;
+
   @override
   void initState() {
     super.initState();
     _visionCraft = VisionCraftService();
+    _loadSubscription();
+  }
+
+  Future<void> _loadSubscription() async {
+    try {
+      final sub = await SubscriptionService().getMySubscription();
+      if (mounted) setState(() => _subscription = sub);
+    } catch (_) {
+      // Non-critical — silently ignore; quota check happens server-side too
+    }
   }
 
   @override
@@ -44,6 +59,13 @@ class _CreateArtScreenState extends State<CreateArtScreen> {
     if (prompt.isEmpty) {
       setState(() {
         _error = 'Enter a description for your art';
+        _generatedImage = null;
+      });
+      return;
+    }
+    if (_subscription != null && _subscription!.quotaExceeded) {
+      setState(() {
+        _error = null;
         _generatedImage = null;
       });
       return;
@@ -119,6 +141,11 @@ class _CreateArtScreenState extends State<CreateArtScreen> {
                 ],
               ),
             ),
+            if (_subscription != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: QuotaBanner(subscription: _subscription!),
+              ),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -241,7 +268,11 @@ class _CreateArtScreenState extends State<CreateArtScreen> {
                     SizedBox(
                       height: 50,
                       child: FilledButton.icon(
-                        onPressed: _loading || !_visionCraft.isConfigured ? null : _generate,
+                        onPressed: _loading ||
+                                !_visionCraft.isConfigured ||
+                                (_subscription?.quotaExceeded ?? false)
+                            ? null
+                            : _generate,
                         icon: _loading
                             ? const SizedBox(
                                 width: 22,

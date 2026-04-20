@@ -16,6 +16,7 @@ import '../../widgets/social_share_sheet.dart';
 import '../preferences/preferences_screen.dart';
 import '../report/report_screen.dart';
 import '../splash/widgets/smoke_background.dart';
+import '../../../features/subscription/screens/subscription_screen.dart';
 import '../signature/signature_editor_screen.dart';
 import 'artwork_detail_screen.dart';
 import 'edit_profile_screen.dart';
@@ -565,6 +566,32 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       initialWebsite: widget.userWebsite,
                       onSaved: widget.onProfileUpdated ?? () {},
                     ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          _GlassCard(
+            child: ListTile(
+              leading: const Icon(Icons.workspace_premium_rounded,
+                  color: Color(0xFF7C3AED)),
+              title: Text(
+                'Subscription',
+                style: TextStyle(
+                  color: textPrimary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              subtitle: Text(
+                'Manage your plan & usage',
+                style: TextStyle(color: textSecondary, fontSize: 12),
+              ),
+              trailing: Icon(Icons.chevron_right, color: textSecondary),
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const SubscriptionScreen(),
                   ),
                 );
               },

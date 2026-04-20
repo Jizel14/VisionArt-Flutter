@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../../core/api_client.dart';
+import '../../../core/error_utils.dart';
 import '../../../core/services/artwork_service.dart';
 import '../../../core/services/follow_service.dart';
 import '../../../core/services/notifications_service.dart';
@@ -13,6 +15,7 @@ import 'notifications_screen.dart';
 import '../profile/artwork_detail_screen.dart';
 import 'saved_collections_screen.dart';
 import '../profile/profile_inspect_screen.dart';
+import '../../widgets/admin_announcement_banner.dart';
 
 class HomeTab extends StatefulWidget {
   const HomeTab({
@@ -273,8 +276,10 @@ class _HomeTabState extends State<HomeTab> {
     bool hasRequestedComments = false;
     bool isSheetOpen = true;
     ArtworkCommentItem? replyingTo;
+    String? commentErrorMessage;
     List<MentionUserItem> mentionSuggestions = const <MentionUserItem>[];
     final Map<String, String> selectedMentionIdsByName = {};
+    final commentScrollController = ScrollController();
 
     await showModalBottomSheet<void>(
       context: context,
@@ -403,410 +408,522 @@ class _HomeTabState extends State<HomeTab> {
               loadComments(setSheetState);
             }
 
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 16,
-                right: 16,
-                top: 14,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 16,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Comments',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: context.textPrimaryColor,
-                      fontWeight: FontWeight.w700,
+            final mediaQuery = MediaQuery.of(context);
+            final keyboardOpen = mediaQuery.viewInsets.bottom > 0;
+            final commentsMaxHeight =
+                (mediaQuery.size.height * (keyboardOpen ? 0.28 : 0.42))
+                    .clamp(170.0, 320.0)
+                    .toDouble();
+            final mentionMaxHeight = keyboardOpen ? 110.0 : 150.0;
+
+            return SafeArea(
+              top: false,
+              child: SingleChildScrollView(
+                controller: commentScrollController,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                padding: EdgeInsets.only(
+                  left: 16,
+                  right: 16,
+                  top: 12,
+                  bottom: mediaQuery.viewInsets.bottom + 12,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 38,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 10),
+                        decoration: BoxDecoration(
+                          color: context.borderColor.withOpacity(0.7),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 280,
-                    child: isLoadingComments
-                        ? const Center(child: CircularProgressIndicator())
-                        : comments.isEmpty
-                        ? Center(
-                            child: Text(
-                              'No comments yet',
-                              style: TextStyle(
-                                color: context.textSecondaryColor,
+                    Text(
+                      'Comments',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: context.textPrimaryColor,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: 170,
+                        maxHeight: commentsMaxHeight,
+                      ),
+                      child: isLoadingComments
+                          ? const Center(child: CircularProgressIndicator())
+                          : comments.isEmpty
+                          ? Center(
+                              child: Text(
+                                'No comments yet',
+                                style: TextStyle(
+                                  color: context.textSecondaryColor,
+                                ),
                               ),
-                            ),
-                          )
-                        : ListView.separated(
-                            itemCount: comments.length,
-                            separatorBuilder: (_, __) =>
-                                const Divider(height: 16),
-                            itemBuilder: (_, index) {
-                              final comment = comments[index];
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      CircleAvatar(
-                                        radius: 14,
-                                        backgroundImage:
-                                            comment.userAvatarUrl != null
-                                            ? NetworkImage(
-                                                comment.userAvatarUrl!,
-                                              )
-                                            : null,
-                                        child: comment.userAvatarUrl == null
-                                            ? Text(
-                                                comment.userName.isNotEmpty
-                                                    ? comment.userName[0]
-                                                          .toUpperCase()
-                                                    : '?',
-                                              )
-                                            : null,
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              comment.userName,
-                                              style: TextStyle(
-                                                color: context.textPrimaryColor,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              comment.content,
-                                              style: TextStyle(
-                                                color:
-                                                    context.textSecondaryColor,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 4),
-                                            GestureDetector(
-                                              onTap: () {
-                                                setSheetState(() {
-                                                  replyingTo = comment;
-                                                  commentCtrl.text =
-                                                      '@${comment.userName} ';
-                                                  commentCtrl.selection =
-                                                      TextSelection.collapsed(
-                                                        offset: commentCtrl
-                                                            .text
-                                                            .length,
-                                                      );
-                                                  selectedMentionIdsByName[comment
-                                                          .userName
-                                                          .toLowerCase()] =
-                                                      comment.userId;
-                                                });
-                                              },
-                                              child: Text(
-                                                'Reply',
+                            )
+                          : ListView.separated(
+                              itemCount: comments.length,
+                              separatorBuilder: (_, __) =>
+                                  const Divider(height: 16),
+                              itemBuilder: (_, index) {
+                                final comment = comments[index];
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        CircleAvatar(
+                                          radius: 14,
+                                          backgroundImage:
+                                              comment.userAvatarUrl != null
+                                              ? NetworkImage(
+                                                  comment.userAvatarUrl!,
+                                                )
+                                              : null,
+                                          child: comment.userAvatarUrl == null
+                                              ? Text(
+                                                  comment.userName.isNotEmpty
+                                                      ? comment.userName[0]
+                                                            .toUpperCase()
+                                                      : '?',
+                                                )
+                                              : null,
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                comment.userName,
                                                 style: TextStyle(
-                                                  color: Theme.of(
-                                                    context,
-                                                  ).colorScheme.primary,
-                                                  fontSize: 12,
+                                                  color: context
+                                                      .textPrimaryColor,
                                                   fontWeight: FontWeight.w600,
                                                 ),
                                               ),
-                                            ),
-                                          ],
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                comment.content,
+                                                style: TextStyle(
+                                                  color: context
+                                                      .textSecondaryColor,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 4),
+                                              GestureDetector(
+                                                onTap: () {
+                                                  setSheetState(() {
+                                                    replyingTo = comment;
+                                                    commentCtrl.text =
+                                                        '@${comment.userName} ';
+                                                    commentCtrl.selection =
+                                                        TextSelection.collapsed(
+                                                          offset: commentCtrl
+                                                              .text
+                                                              .length,
+                                                        );
+                                                    selectedMentionIdsByName[comment
+                                                            .userName
+                                                            .toLowerCase()] =
+                                                        comment.userId;
+                                                  });
+                                                },
+                                                child: Text(
+                                                  'Reply',
+                                                  style: TextStyle(
+                                                    color: Theme.of(
+                                                      context,
+                                                    ).colorScheme.primary,
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    if (comment.replies.isNotEmpty) ...[
+                                      const SizedBox(height: 8),
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          left: 24,
+                                        ),
+                                        child: Column(
+                                          children: comment.replies.map((reply) {
+                                            return Padding(
+                                              padding: const EdgeInsets.only(
+                                                bottom: 8,
+                                              ),
+                                              child: Row(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  CircleAvatar(
+                                                    radius: 12,
+                                                    backgroundImage:
+                                                        reply.userAvatarUrl !=
+                                                            null
+                                                        ? NetworkImage(
+                                                            reply.userAvatarUrl!,
+                                                          )
+                                                        : null,
+                                                    child:
+                                                        reply.userAvatarUrl ==
+                                                            null
+                                                        ? Text(
+                                                            reply
+                                                                    .userName
+                                                                    .isNotEmpty
+                                                                ? reply
+                                                                      .userName[0]
+                                                                      .toUpperCase()
+                                                                : '?',
+                                                            style:
+                                                                const TextStyle(
+                                                                  fontSize: 11,
+                                                                ),
+                                                          )
+                                                        : null,
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        Text(
+                                                          reply.userName,
+                                                          style: TextStyle(
+                                                            color: context
+                                                                .textPrimaryColor,
+                                                            fontSize: 12,
+                                                            fontWeight:
+                                                                FontWeight.w600,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 2,
+                                                        ),
+                                                        Text(
+                                                          reply.content,
+                                                          style: TextStyle(
+                                                            color: context
+                                                                .textSecondaryColor,
+                                                            fontSize: 12,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          }).toList(),
                                         ),
                                       ),
                                     ],
-                                  ),
-                                  if (comment.replies.isNotEmpty) ...[
-                                    const SizedBox(height: 8),
-                                    Padding(
-                                      padding: const EdgeInsets.only(left: 24),
-                                      child: Column(
-                                        children: comment.replies.map((reply) {
-                                          return Padding(
-                                            padding: const EdgeInsets.only(
-                                              bottom: 8,
-                                            ),
-                                            child: Row(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                CircleAvatar(
-                                                  radius: 12,
-                                                  backgroundImage:
-                                                      reply.userAvatarUrl !=
-                                                          null
-                                                      ? NetworkImage(
-                                                          reply.userAvatarUrl!,
-                                                        )
-                                                      : null,
-                                                  child:
-                                                      reply.userAvatarUrl ==
-                                                          null
-                                                      ? Text(
-                                                          reply
-                                                                  .userName
-                                                                  .isNotEmpty
-                                                              ? reply
-                                                                    .userName[0]
-                                                                    .toUpperCase()
-                                                              : '?',
-                                                          style:
-                                                              const TextStyle(
-                                                                fontSize: 11,
-                                                              ),
-                                                        )
-                                                      : null,
-                                                ),
-                                                const SizedBox(width: 8),
-                                                Expanded(
-                                                  child: Column(
-                                                    crossAxisAlignment:
-                                                        CrossAxisAlignment
-                                                            .start,
-                                                    children: [
-                                                      Text(
-                                                        reply.userName,
-                                                        style: TextStyle(
-                                                          color: context
-                                                              .textPrimaryColor,
-                                                          fontSize: 12,
-                                                          fontWeight:
-                                                              FontWeight.w600,
-                                                        ),
-                                                      ),
-                                                      const SizedBox(height: 2),
-                                                      Text(
-                                                        reply.content,
-                                                        style: TextStyle(
-                                                          color: context
-                                                              .textSecondaryColor,
-                                                          fontSize: 12,
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          );
-                                        }).toList(),
-                                      ),
-                                    ),
                                   ],
-                                ],
-                              );
-                            },
-                          ),
-                  ),
-                  const SizedBox(height: 12),
-                  if (replyingTo != null)
-                    Container(
-                      width: double.infinity,
-                      margin: const EdgeInsets.only(bottom: 8),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: context.surfaceColor.withOpacity(0.35),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Replying to ${replyingTo!.userName}',
-                              style: TextStyle(
-                                color: context.textSecondaryColor,
-                                fontSize: 12,
-                              ),
-                            ),
-                          ),
-                          GestureDetector(
-                            onTap: () {
-                              setSheetState(() {
-                                replyingTo = null;
-                              });
-                            },
-                            child: Text(
-                              'Cancel',
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.primary,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  if (isLoadingMentionSuggestions)
-                    const Padding(
-                      padding: EdgeInsets.only(bottom: 8),
-                      child: LinearProgressIndicator(minHeight: 2),
-                    )
-                  else if (mentionSuggestions.isNotEmpty)
-                    Container(
-                      constraints: const BoxConstraints(maxHeight: 150),
-                      margin: const EdgeInsets.only(bottom: 8),
-                      decoration: BoxDecoration(
-                        color: context.surfaceColor.withOpacity(0.45),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: context.borderColor.withOpacity(0.4),
-                        ),
-                      ),
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: mentionSuggestions.length,
-                        separatorBuilder: (_, __) => Divider(
-                          height: 1,
-                          color: context.borderColor.withOpacity(0.3),
-                        ),
-                        itemBuilder: (_, index) {
-                          final user = mentionSuggestions[index];
-                          return ListTile(
-                            dense: true,
-                            leading: CircleAvatar(
-                              radius: 12,
-                              backgroundImage: user.avatarUrl != null
-                                  ? NetworkImage(user.avatarUrl!)
-                                  : null,
-                              child: user.avatarUrl == null
-                                  ? Text(
-                                      user.name.isNotEmpty
-                                          ? user.name[0].toUpperCase()
-                                          : '?',
-                                      style: const TextStyle(fontSize: 11),
-                                    )
-                                  : null,
-                            ),
-                            title: Text(
-                              user.name,
-                              style: TextStyle(
-                                color: context.textPrimaryColor,
-                                fontSize: 13,
-                              ),
-                            ),
-                            onTap: () => selectMention(user, setSheetState),
-                          );
-                        },
-                      ),
-                    ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: commentCtrl,
-                          onChanged: (value) {
-                            loadMentionSuggestions(value, setSheetState);
-                          },
-                          style: TextStyle(color: context.textPrimaryColor),
-                          decoration: InputDecoration(
-                            hintText: replyingTo != null
-                                ? 'Write a reply...'
-                                : 'Write a comment...',
-                            hintStyle: TextStyle(
-                              color: context.textSecondaryColor,
-                            ),
-                            filled: true,
-                            fillColor: context.surfaceColor.withOpacity(0.4),
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide.none,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      IconButton(
-                        onPressed: isSubmitting
-                            ? null
-                            : () async {
-                                final content = commentCtrl.text.trim();
-                                if (content.isEmpty) return;
-
-                                final mentionUserIds = resolveMentionedUserIds(
-                                  content,
                                 );
+                              },
+                            ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (replyingTo != null)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: context.surfaceColor.withOpacity(0.35),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Replying to ${replyingTo!.userName}',
+                                style: TextStyle(
+                                  color: context.textSecondaryColor,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                            GestureDetector(
+                              onTap: () {
+                                setSheetState(() {
+                                  replyingTo = null;
+                                });
+                              },
+                              child: Text(
+                                'Cancel',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.primary,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (isLoadingMentionSuggestions)
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 8),
+                        child: LinearProgressIndicator(minHeight: 2),
+                      )
+                    else if (mentionSuggestions.isNotEmpty)
+                      Container(
+                        constraints: BoxConstraints(maxHeight: mentionMaxHeight),
+                        margin: const EdgeInsets.only(bottom: 8),
+                        decoration: BoxDecoration(
+                          color: context.surfaceColor.withOpacity(0.45),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: context.borderColor.withOpacity(0.4),
+                          ),
+                        ),
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: mentionSuggestions.length,
+                          separatorBuilder: (_, __) => Divider(
+                            height: 1,
+                            color: context.borderColor.withOpacity(0.3),
+                          ),
+                          itemBuilder: (_, index) {
+                            final user = mentionSuggestions[index];
+                            return ListTile(
+                              dense: true,
+                              leading: CircleAvatar(
+                                radius: 12,
+                                backgroundImage: user.avatarUrl != null
+                                    ? NetworkImage(user.avatarUrl!)
+                                    : null,
+                                child: user.avatarUrl == null
+                                    ? Text(
+                                        user.name.isNotEmpty
+                                            ? user.name[0].toUpperCase()
+                                            : '?',
+                                        style: const TextStyle(fontSize: 11),
+                                      )
+                                    : null,
+                              ),
+                              title: Text(
+                                user.name,
+                                style: TextStyle(
+                                  color: context.textPrimaryColor,
+                                  fontSize: 13,
+                                ),
+                              ),
+                              onTap: () => selectMention(user, setSheetState),
+                            );
+                          },
+                        ),
+                      ),
+                    if (commentErrorMessage != null)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.error.withOpacity(
+                            0.12,
+                          ),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: Theme.of(context).colorScheme.error.withOpacity(
+                              0.35,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(top: 1, right: 8),
+                              child: Icon(
+                                Icons.info_outline_rounded,
+                                size: 16,
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            ),
+                            Expanded(
+                              child: Text(
+                                commentErrorMessage!,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  height: 1.25,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: commentCtrl,
+                            onChanged: (value) {
+                              if (commentErrorMessage != null) {
+                                setSheetState(() => commentErrorMessage = null);
+                              }
+                              loadMentionSuggestions(value, setSheetState);
+                            },
+                            style: TextStyle(color: context.textPrimaryColor),
+                            decoration: InputDecoration(
+                              hintText: replyingTo != null
+                                  ? 'Write a reply...'
+                                  : 'Write a comment...',
+                              hintStyle: TextStyle(
+                                color: context.textSecondaryColor,
+                              ),
+                              filled: true,
+                              fillColor: context.surfaceColor.withOpacity(0.4),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(12),
+                                borderSide: BorderSide.none,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          onPressed: isSubmitting
+                              ? null
+                              : () async {
+                                  final content = commentCtrl.text.trim();
+                                  if (content.isEmpty) return;
 
-                                setSheetState(() => isSubmitting = true);
-                                try {
-                                  final created = await _artworkService
-                                      .createArtworkComment(
-                                        artwork.id,
-                                        content,
-                                        parentCommentId: replyingTo?.id,
-                                        mentionedUserIds: mentionUserIds,
-                                      );
+                                  final mentionUserIds = resolveMentionedUserIds(
+                                    content,
+                                  );
 
-                                  if (!mounted ||
-                                      !isSheetOpen ||
-                                      !sheetContext.mounted)
-                                    return;
-                                  setSheetState(() {
-                                    if (created.parentCommentId != null) {
-                                      final parentIndex = comments.indexWhere(
-                                        (item) =>
-                                            item.id == created.parentCommentId,
-                                      );
-                                      if (parentIndex >= 0) {
-                                        comments[parentIndex] = appendReply(
-                                          comments[parentIndex],
-                                          created,
+                                  setSheetState(() => isSubmitting = true);
+                                  try {
+                                    final created = await _artworkService
+                                        .createArtworkComment(
+                                          artwork.id,
+                                          content,
+                                          parentCommentId: replyingTo?.id,
+                                          mentionedUserIds: mentionUserIds,
                                         );
+
+                                    if (!mounted ||
+                                        !isSheetOpen ||
+                                        !sheetContext.mounted)
+                                      return;
+                                    setSheetState(() {
+                                      commentErrorMessage = null;
+                                      if (created.parentCommentId != null) {
+                                        final parentIndex = comments.indexWhere(
+                                          (item) =>
+                                              item.id == created.parentCommentId,
+                                        );
+                                        if (parentIndex >= 0) {
+                                          comments[parentIndex] = appendReply(
+                                            comments[parentIndex],
+                                            created,
+                                          );
+                                        } else {
+                                          comments.insert(0, created);
+                                        }
                                       } else {
                                         comments.insert(0, created);
                                       }
-                                    } else {
-                                      comments.insert(0, created);
-                                    }
-                                    commentCtrl.clear();
-                                    replyingTo = null;
-                                    mentionSuggestions =
-                                        const <MentionUserItem>[];
-                                    isSubmitting = false;
-                                  });
+                                      commentCtrl.clear();
+                                      replyingTo = null;
+                                      mentionSuggestions =
+                                          const <MentionUserItem>[];
+                                      isSubmitting = false;
+                                    });
 
-                                  setState(() {
-                                    final current = _artworks[artworkIndex];
-                                    _artworks[artworkIndex] = current.copyWith(
-                                      commentsCount: current.commentsCount + 1,
-                                    );
-                                  });
-                                } catch (_) {
-                                  if (!mounted ||
-                                      !isSheetOpen ||
-                                      !sheetContext.mounted)
-                                    return;
-                                  setSheetState(() => isSubmitting = false);
-                                  ScaffoldMessenger.of(
-                                    this.context,
-                                  ).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Failed to send comment.'),
-                                    ),
-                                  );
-                                }
-                              },
-                        icon: isSubmitting
-                            ? const SizedBox(
-                                height: 16,
-                                width: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.send_rounded),
-                      ),
-                    ],
-                  ),
-                ],
+                                    setState(() {
+                                      final current = _artworks[artworkIndex];
+                                      _artworks[artworkIndex] = current.copyWith(
+                                        commentsCount:
+                                            current.commentsCount + 1,
+                                      );
+                                    });
+                                  } on ApiException catch (e) {
+                                    if (!mounted ||
+                                        !isSheetOpen ||
+                                        !sheetContext.mounted)
+                                      return;
+                                    setSheetState(() {
+                                      isSubmitting = false;
+                                      commentErrorMessage = e.message;
+                                    });
+                                    WidgetsBinding.instance
+                                        .addPostFrameCallback((_) {
+                                      if (commentScrollController.hasClients) {
+                                        commentScrollController.animateTo(
+                                          commentScrollController
+                                              .position.maxScrollExtent,
+                                          duration:
+                                              const Duration(milliseconds: 250),
+                                          curve: Curves.easeOut,
+                                        );
+                                      }
+                                    });
+                                  } catch (e) {
+                                    if (!mounted ||
+                                        !isSheetOpen ||
+                                        !sheetContext.mounted)
+                                      return;
+                                    setSheetState(() {
+                                      isSubmitting = false;
+                                      commentErrorMessage =
+                                          userFacingApiError(e);
+                                    });
+                                    WidgetsBinding.instance
+                                        .addPostFrameCallback((_) {
+                                      if (commentScrollController.hasClients) {
+                                        commentScrollController.animateTo(
+                                          commentScrollController
+                                              .position.maxScrollExtent,
+                                          duration:
+                                              const Duration(milliseconds: 250),
+                                          curve: Curves.easeOut,
+                                        );
+                                      }
+                                    });
+                                  }
+                                },
+                          icon: isSubmitting
+                              ? const SizedBox(
+                                  height: 16,
+                                  width: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.send_rounded),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             );
           },
@@ -814,6 +931,8 @@ class _HomeTabState extends State<HomeTab> {
       },
     ).whenComplete(() {
       isSheetOpen = false;
+      commentCtrl.dispose();
+      commentScrollController.dispose();
     });
   }
 
@@ -830,6 +949,7 @@ class _HomeTabState extends State<HomeTab> {
     String selectedReason = ArtworkService.reportReasons.first;
     bool isSubmitting = false;
     bool isSheetOpen = true;
+    String? reportErrorMessage;
 
     await showModalBottomSheet<void>(
       context: context,
@@ -902,13 +1022,46 @@ class _HomeTabState extends State<HomeTab> {
                     ),
                   ),
                   const SizedBox(height: 12),
+                  if (reportErrorMessage != null) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
+                      margin: const EdgeInsets.only(bottom: 12),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.error.withOpacity(
+                              0.12,
+                            ),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.error.withOpacity(
+                                0.35,
+                              ),
+                        ),
+                      ),
+                      child: Text(
+                        reportErrorMessage!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                          height: 1.25,
+                        ),
+                      ),
+                    ),
+                  ],
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: isSubmitting
                           ? null
                           : () async {
-                              setSheetState(() => isSubmitting = true);
+                              setSheetState(() {
+                                isSubmitting = true;
+                                reportErrorMessage = null;
+                              });
                               try {
                                 await _artworkService.reportArtwork(
                                   artworkId: artwork.id,
@@ -928,17 +1081,15 @@ class _HomeTabState extends State<HomeTab> {
                                     ),
                                   ),
                                 );
-                              } catch (_) {
+                              } catch (e) {
                                 if (!mounted ||
                                     !isSheetOpen ||
                                     !sheetContext.mounted)
                                   return;
-                                setSheetState(() => isSubmitting = false);
-                                ScaffoldMessenger.of(this.context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('Failed to report artwork.'),
-                                  ),
-                                );
+                                setSheetState(() {
+                                  isSubmitting = false;
+                                  reportErrorMessage = userFacingApiError(e);
+                                });
                               }
                             },
                       child: isSubmitting
@@ -967,10 +1118,15 @@ class _HomeTabState extends State<HomeTab> {
     final textSecondary = context.textSecondaryColor;
 
     return SmokeBackground(
-      child: SafeArea(
-        child: widget.isLoading
-            ? _buildShimmer(context)
-            : CustomScrollView(
+      child: Column(
+        children: [
+          const AdminAnnouncementBanner(),
+          Expanded(
+            child: SafeArea(
+              top: false,
+              child: widget.isLoading
+                  ? _buildShimmer(context)
+                  : CustomScrollView(
                 controller: _scrollController,
                 slivers: [
                   SliverToBoxAdapter(
@@ -1147,6 +1303,9 @@ class _HomeTabState extends State<HomeTab> {
                   const SliverToBoxAdapter(child: SizedBox(height: 100)),
                 ],
               ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -6,10 +6,32 @@ import '../../theme/theme_extensions.dart';
 import '../splash/widgets/smoke_background.dart';
 import '../preferences/preferences_onboarding_screen.dart';
 import '../../widgets/custom_painters/smoke_painter.dart';
+import 'package:dio/dio.dart';
 import '../../../core/api_client.dart';
 import '../../../core/auth_service.dart';
 import '../../../core/app_config.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+
+/// Extract a clean user-facing message from any exception (including DioException).
+String _extractErrorMessage(Object e) {
+  if (e is ApiException) return e.message;
+  if (e is DioException) {
+    // Try to get the backend message from the response body first.
+    final data = e.response?.data;
+    if (data is Map) {
+      final msg = data['message'];
+      if (msg is String && msg.isNotEmpty) return msg;
+      if (msg is List && msg.isNotEmpty) return (msg).first.toString();
+    }
+    // Fall back to a generic message based on status code.
+    final status = e.response?.statusCode;
+    if (status == 401) return 'Invalid email or password.';
+    if (status == 404) return 'Account not found.';
+    if (status != null) return 'Server error ($status). Please try again.';
+    return 'Could not reach the server. Check your connection.';
+  }
+  return e.toString();
+}
 
 /// User-friendly message for Google Sign-In errors (e.g. ApiException 10 = developer config).
 String googleSignInErrorMessage(Object e) {
@@ -238,18 +260,11 @@ class _LoginCardState extends State<_LoginCard> {
         setState(() => _loading = false);
         widget.onSuccess();
       }
-    } on ApiException catch (e) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _error = e.message;
-        });
-      }
     } catch (e) {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = e.toString();
+          _error = _extractErrorMessage(e);
         });
       }
     }
@@ -743,18 +758,11 @@ class _SignUpCardState extends State<_SignUpCard> {
           ),
         ),
       );
-    } on ApiException catch (e) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _error = e.message;
-        });
-      }
     } catch (e) {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = e.toString();
+          _error = _extractErrorMessage(e);
         });
       }
     }

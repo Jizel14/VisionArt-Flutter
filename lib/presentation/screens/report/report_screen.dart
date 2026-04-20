@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../../../core/auth_service.dart';
+import '../../../core/error_utils.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
 import '../splash/widgets/smoke_background.dart';
@@ -113,7 +114,7 @@ class _ReportScreenState extends State<ReportScreen> {
       );
       Navigator.of(context).pop();
     } catch (e) {
-      setState(() => _error = e.toString());
+      setState(() => _error = userFacingApiError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
