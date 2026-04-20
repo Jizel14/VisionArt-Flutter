@@ -1,14 +1,21 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/api_client.dart';
 import '../../../core/error_utils.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/services/artwork_service.dart';
 import '../../../core/services/follow_service.dart';
 import '../../../core/services/notifications_service.dart';
+import '../../../core/services/storage_service.dart';
+import '../../../core/services/story_service.dart';
 import '../../../core/models/artwork_model.dart';
+import '../../../core/models/story_model.dart';
 import '../../../core/models/user_model.dart';
+import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
 import '../splash/widgets/smoke_background.dart';
 import 'notifications_screen.dart';
@@ -39,6 +46,8 @@ class _HomeTabState extends State<HomeTab> {
   late ArtworkService _artworkService;
   late FollowService _followService;
   late NotificationsService _notificationsService;
+  late StoryService _storyService;
+  late StorageService _storageService;
   late ScrollController _scrollController;
 
   List<ArtworkModel> _artworks = [];
@@ -47,16 +56,22 @@ class _HomeTabState extends State<HomeTab> {
   int _currentPage = 1;
   int _unreadNotificationsCount = 0;
 
+  List<StoryModel> _stories = const <StoryModel>[];
+  bool _isLoadingStories = false;
+
   @override
   void initState() {
     super.initState();
     _artworkService = ArtworkService();
     _followService = FollowService();
     _notificationsService = NotificationsService();
+    _storyService = StoryService();
+    _storageService = StorageService();
     _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
     _loadFeed();
     _loadUnreadNotifications();
+    _loadStories();
   }
 
   @override
@@ -101,7 +116,61 @@ class _HomeTabState extends State<HomeTab> {
       _currentPage = 1;
       _hasMore = true;
     });
+    await _loadStories();
     await _loadFeed();
+  }
+
+  Future<void> _loadStories() async {
+    if (_isLoadingStories) return;
+    setState(() => _isLoadingStories = true);
+
+    try {
+      final stories = await _storyService.getFeed(limit: 60);
+      if (!mounted) return;
+      setState(() {
+        _stories = stories;
+        _isLoadingStories = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isLoadingStories = false);
+    }
+  }
+
+  Future<void> _showCreateStorySheet() async {
+    final didPost = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: context.cardBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (_) => _CreateStoryBottomSheet(
+        storageService: _storageService,
+        storyService: _storyService,
+      ),
+    );
+
+    if (didPost == true) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Story posted')));
+      await _loadStories();
+    }
+  }
+
+  Future<void> _openStoryViewer(String userId) async {
+    final stories = _stories.where((s) => s.user.id == userId).toList()
+      ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+
+    if (stories.isEmpty) return;
+
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      builder: (_) => _StoryViewerDialog(stories: stories),
+    );
   }
 
   Future<void> _loadUnreadNotifications() async {
@@ -1201,6 +1270,18 @@ class _HomeTabState extends State<HomeTab> {
                       ),
                     ),
                   ),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _StoriesStrip(
+                        currentUser: widget.currentUser,
+                        stories: _stories,
+                        isLoading: _isLoadingStories,
+                        onCreateStory: _showCreateStorySheet,
+                        onOpenUserStories: _openStoryViewer,
+                      ),
+                    ),
+                  ),
                   if (_artworks.isEmpty && !_isLoadingFeed)
                     SliverToBoxAdapter(
                       child: Padding(
@@ -1537,6 +1618,539 @@ class _FooterAction extends StatelessWidget {
               style: TextStyle(
                 color: context.textSecondaryColor,
                 fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StoriesStrip extends StatelessWidget {
+  const _StoriesStrip({
+    required this.currentUser,
+    required this.stories,
+    required this.isLoading,
+    required this.onCreateStory,
+    required this.onOpenUserStories,
+  });
+
+  final UserModel? currentUser;
+  final List<StoryModel> stories;
+  final bool isLoading;
+  final VoidCallback onCreateStory;
+  final ValueChanged<String> onOpenUserStories;
+
+  @override
+  Widget build(BuildContext context) {
+    final border = context.borderColor;
+
+    final userStories = <String, List<StoryModel>>{};
+    for (final story in stories) {
+      (userStories[story.user.id] ??= <StoryModel>[]).add(story);
+    }
+
+    final meId = currentUser?.id;
+    final myStories = meId != null
+        ? (userStories[meId] ?? const <StoryModel>[])
+        : const <StoryModel>[];
+
+    final otherEntries =
+        userStories.entries.where((e) => e.key != meId).toList()..sort((a, b) {
+          final aLatest = a.value
+              .map((s) => s.createdAt)
+              .reduce((x, y) => x.isAfter(y) ? x : y);
+          final bLatest = b.value
+              .map((s) => s.createdAt)
+              .reduce((x, y) => x.isAfter(y) ? x : y);
+          return bLatest.compareTo(aLatest);
+        });
+
+    final itemsCount = 1 + otherEntries.length;
+
+    return SizedBox(
+      height: 104,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        itemCount: itemsCount,
+        separatorBuilder: (_, __) => const SizedBox(width: 14),
+        itemBuilder: (context, index) {
+          if (index == 0) {
+            final label = 'Your story';
+            final avatarUrl = currentUser?.avatarUrl;
+            final hasStory = myStories.isNotEmpty;
+
+            return _StoryBubble(
+              label: label,
+              avatarFallbackText: currentUser?.name,
+              avatarUrl: avatarUrl,
+              showAdd: true,
+              showRing: hasStory,
+              ringFallbackBorderColor: border.withOpacity(0.6),
+              onTap: hasStory && meId != null
+                  ? () => onOpenUserStories(meId)
+                  : onCreateStory,
+              onTapAdd: onCreateStory,
+            );
+          }
+
+          final entry = otherEntries[index - 1];
+          final first = entry.value.first;
+          return _StoryBubble(
+            label: first.user.name,
+            avatarUrl: first.user.avatarUrl,
+            showAdd: false,
+            showRing: true,
+            ringFallbackBorderColor: border.withOpacity(0.6),
+            onTap: () => onOpenUserStories(entry.key),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _StoryBubble extends StatelessWidget {
+  const _StoryBubble({
+    required this.label,
+    this.avatarFallbackText,
+    required this.avatarUrl,
+    required this.onTap,
+    required this.showAdd,
+    required this.showRing,
+    required this.ringFallbackBorderColor,
+    this.onTapAdd,
+  });
+
+  final String label;
+  final String? avatarFallbackText;
+  final String? avatarUrl;
+  final VoidCallback onTap;
+  final bool showAdd;
+  final bool showRing;
+  final Color ringFallbackBorderColor;
+  final VoidCallback? onTapAdd;
+
+  @override
+  Widget build(BuildContext context) {
+    final textSecondary = context.textSecondaryColor;
+    final bg = context.surfaceColor;
+
+    final fallbackText = (avatarFallbackText ?? label).trim();
+
+    final avatar = CircleAvatar(
+      radius: 30,
+      backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl!) : null,
+      child: avatarUrl == null
+          ? Text(
+              fallbackText.isNotEmpty ? fallbackText[0].toUpperCase() : '?',
+              style: TextStyle(
+                color: context.textPrimaryColor,
+                fontWeight: FontWeight.w700,
+              ),
+            )
+          : null,
+    );
+
+    return SizedBox(
+      width: 78,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(2.5),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: showRing ? AppColors.primaryGradient : null,
+                    border: showRing
+                        ? null
+                        : Border.all(
+                            color: ringFallbackBorderColor,
+                            width: 1.5,
+                          ),
+                  ),
+                  child: avatar,
+                ),
+                if (showAdd)
+                  Positioned(
+                    bottom: -1,
+                    right: -1,
+                    child: GestureDetector(
+                      onTap: onTapAdd,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: AppColors.primaryGradient,
+                          border: Border.all(color: bg, width: 2),
+                        ),
+                        padding: const EdgeInsets.all(4),
+                        child: const Icon(
+                          Icons.add_rounded,
+                          size: 14,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CreateStoryBottomSheet extends StatefulWidget {
+  const _CreateStoryBottomSheet({
+    required this.storageService,
+    required this.storyService,
+  });
+
+  final StorageService storageService;
+  final StoryService storyService;
+
+  @override
+  State<_CreateStoryBottomSheet> createState() =>
+      _CreateStoryBottomSheetState();
+}
+
+class _CreateStoryBottomSheetState extends State<_CreateStoryBottomSheet> {
+  final TextEditingController _urlCtrl = TextEditingController();
+  final ImagePicker _picker = ImagePicker();
+
+  bool _isPosting = false;
+  XFile? _selectedFile;
+  Uint8List? _selectedBytes;
+
+  @override
+  void dispose() {
+    _urlCtrl.dispose();
+    super.dispose();
+  }
+
+  String? _fileExtFromName(String? name) {
+    if (name == null) return null;
+    final trimmed = name.trim();
+    final dot = trimmed.lastIndexOf('.');
+    if (dot < 0 || dot == trimmed.length - 1) return null;
+    return trimmed.substring(dot + 1).toLowerCase();
+  }
+
+  String _contentTypeFromExt(String? ext) {
+    switch (ext) {
+      case 'jpg':
+      case 'jpeg':
+        return 'image/jpeg';
+      case 'png':
+        return 'image/png';
+      case 'webp':
+        return 'image/webp';
+      case 'heic':
+        return 'image/heic';
+      default:
+        return 'application/octet-stream';
+    }
+  }
+
+  Future<void> _pickImage() async {
+    try {
+      final picked = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 92,
+        maxWidth: 1440,
+      );
+      if (picked == null) return;
+
+      final bytes = await picked.readAsBytes();
+      if (!mounted) return;
+
+      setState(() {
+        _selectedFile = picked;
+        _selectedBytes = bytes;
+        _urlCtrl.text = '';
+      });
+    } catch (e) {
+      if (!mounted) return;
+
+      final message = e is PlatformException
+          ? (e.message ?? e.code)
+          : e.toString();
+      final safeMessage = message.length > 140
+          ? '${message.substring(0, 140)}…'
+          : message;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to pick image: $safeMessage')),
+      );
+    }
+  }
+
+  Future<void> _postStory() async {
+    if (_isPosting) return;
+
+    final url = _urlCtrl.text.trim();
+    if (_selectedBytes == null && url.isEmpty) return;
+
+    setState(() => _isPosting = true);
+
+    try {
+      String mediaUrl = url;
+
+      if (_selectedBytes != null) {
+        final ext = _fileExtFromName(_selectedFile?.name);
+        final contentType = _contentTypeFromExt(ext);
+
+        mediaUrl = await widget.storageService.uploadBytes(
+          bytes: _selectedBytes!,
+          contentType: contentType,
+          prefix: 'stories',
+          fileExt: ext,
+        );
+      }
+
+      await widget.storyService.createStory(mediaUrl: mediaUrl);
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isPosting = false);
+
+      final message = e is DioException
+          ? (e.message ?? 'Request failed')
+          : e.toString();
+      final safeMessage = message.length > 140
+          ? '${message.substring(0, 140)}…'
+          : message;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to post story: $safeMessage')),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        top: 14,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'New story',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: context.textPrimaryColor,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (_selectedBytes != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.memory(
+                  _selectedBytes!,
+                  height: 170,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _isPosting ? null : _pickImage,
+                    icon: const Icon(Icons.photo_library_outlined),
+                    label: Text(
+                      _selectedBytes == null ? 'Choose image' : 'Change image',
+                    ),
+                  ),
+                ),
+                if (_selectedBytes != null) ...[
+                  const SizedBox(width: 10),
+                  IconButton(
+                    onPressed: _isPosting
+                        ? null
+                        : () {
+                            setState(() {
+                              _selectedFile = null;
+                              _selectedBytes = null;
+                            });
+                          },
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Remove',
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _urlCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Or paste image URL',
+                hintText: 'https://…',
+              ),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _isPosting
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _isPosting ? null : _postStory,
+                    child: _isPosting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Post'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StoryViewerDialog extends StatefulWidget {
+  const _StoryViewerDialog({required this.stories});
+
+  final List<StoryModel> stories;
+
+  @override
+  State<_StoryViewerDialog> createState() => _StoryViewerDialogState();
+}
+
+class _StoryViewerDialogState extends State<_StoryViewerDialog> {
+  late final PageController _controller;
+  int _index = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = PageController(initialPage: _index);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final story = widget.stories[_index];
+
+    return Material(
+      color: Colors.black,
+      child: SafeArea(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: PageView.builder(
+                controller: _controller,
+                itemCount: widget.stories.length,
+                onPageChanged: (i) => setState(() => _index = i),
+                itemBuilder: (_, i) {
+                  final item = widget.stories[i];
+                  return Center(
+                    child: CachedNetworkImage(
+                      imageUrl: item.mediaUrl,
+                      fit: BoxFit.contain,
+                      placeholder: (_, __) => const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                      errorWidget: (_, __, ___) => const Icon(
+                        Icons.broken_image_rounded,
+                        color: Colors.white54,
+                        size: 64,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            Positioned(
+              top: 8,
+              left: 12,
+              right: 12,
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundImage: story.user.avatarUrl != null
+                        ? NetworkImage(story.user.avatarUrl!)
+                        : null,
+                    child: story.user.avatarUrl == null
+                        ? Text(
+                            story.user.name.isNotEmpty
+                                ? story.user.name[0].toUpperCase()
+                                : '?',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          )
+                        : null,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      story.user.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                    color: Colors.white,
+                    tooltip: 'Close',
+                  ),
+                ],
               ),
             ),
           ],

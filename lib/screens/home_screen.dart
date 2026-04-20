@@ -115,7 +115,6 @@ class _HomeScreenState extends State<HomeScreen> {
           ProfileScreen(
             authService: widget.authService,
             apiClient: null,
-            userId: _user?['id'] ?? '',
             userName: _user?['name'] ?? 'User',
             userEmail: _user?['email'] ?? '',
             avatarUrl: _user?['avatarUrl'],
@@ -131,6 +130,7 @@ class _HomeScreenState extends State<HomeScreen> {
             isLoading: _loading,
             onLogout: _logout,
             onProfileUpdated: _loadProfile,
+            onRefreshProfile: _loadProfile,
             onToggleTheme: widget.onToggleTheme,
             onThemeChanged: (_) {},
           ),

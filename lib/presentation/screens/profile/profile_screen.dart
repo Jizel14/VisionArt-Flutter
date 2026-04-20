@@ -1,25 +1,20 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
-import 'package:url_launcher/url_launcher.dart';
+import '../../../core/models/user_model.dart';
 import '../../../core/auth_service.dart';
 import '../../../core/api_client.dart';
-import '../../../core/models/artwork_model.dart';
-import '../../../core/models/user_model.dart';
 import '../../../core/preference_storage.dart';
-import '../../../core/services/artwork_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
-import '../../widgets/social_share_sheet.dart';
+import '../preferences/preferences_onboarding_screen.dart';
 import '../preferences/preferences_screen.dart';
 import '../report/report_screen.dart';
 import '../splash/widgets/smoke_background.dart';
 import '../../../features/subscription/screens/subscription_screen.dart';
 import '../signature/signature_editor_screen.dart';
-import 'artwork_detail_screen.dart';
 import 'edit_profile_screen.dart';
+import 'profile_artworks_overview_screen.dart';
 import 'profile_inspect_screen.dart';
 
 Future<void> _showDeleteAccountDialog(
@@ -65,7 +60,7 @@ Future<void> _showDeleteAccountDialog(
 }
 
 /// Profile screen: avatar, name, email, mock stats, logout. Themed with glassmorphism.
-class ProfileScreen extends StatefulWidget {
+class ProfileScreen extends StatelessWidget {
   const ProfileScreen({
     super.key,
     required this.authService,
@@ -78,6 +73,7 @@ class ProfileScreen extends StatefulWidget {
     this.userWebsite,
     required this.onLogout,
     this.onProfileUpdated,
+    this.onRefreshProfile,
     required this.onToggleTheme,
     this.onThemeChanged,
     this.isLoading = false,
@@ -85,7 +81,6 @@ class ProfileScreen extends StatefulWidget {
     this.followersCount = 0,
     this.followingCount = 0,
     this.createdAt,
-    required this.userId,
   });
 
   final AuthService authService;
@@ -98,6 +93,7 @@ class ProfileScreen extends StatefulWidget {
   final String? userWebsite;
   final VoidCallback onLogout;
   final VoidCallback? onProfileUpdated;
+  final Future<void> Function()? onRefreshProfile;
   final VoidCallback onToggleTheme;
   final Function(String)? onThemeChanged;
   final bool isLoading;
@@ -105,126 +101,6 @@ class ProfileScreen extends StatefulWidget {
   final int followersCount;
   final int followingCount;
   final DateTime? createdAt;
-  final String userId;
-
-  @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
-}
-
-class _ProfileScreenState extends State<ProfileScreen> {
-  late final ArtworkService _artworkService;
-  bool _isLoadingMyArtworks = false;
-  List<ArtworkModel> _myArtworks = const <ArtworkModel>[];
-
-  @override
-  void initState() {
-    super.initState();
-    _artworkService = ArtworkService();
-    _loadMyArtworks();
-  }
-
-  UserModel get _currentUser => UserModel(
-    id: widget.userId,
-    name: widget.userName,
-    email: widget.userEmail,
-    bio: widget.userBio,
-    avatarUrl: widget.avatarUrl,
-    isVerified: false,
-    isPrivateAccount: false,
-    followersCount: widget.followersCount,
-    followingCount: widget.followingCount,
-    publicGenerationsCount: widget.artworksCount,
-    createdAt: widget.createdAt ?? DateTime.now(),
-    updatedAt: DateTime.now(),
-  );
-
-  Future<void> _loadMyArtworks() async {
-    if (_isLoadingMyArtworks) return;
-
-    setState(() => _isLoadingMyArtworks = true);
-    try {
-      final result = await _artworkService.getMyArtworks(page: 1, limit: 6);
-      if (!mounted) return;
-      setState(() {
-        _myArtworks = result.data;
-        _isLoadingMyArtworks = false;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _isLoadingMyArtworks = false);
-    }
-  }
-
-  String _artworkLink(ArtworkModel artwork) =>
-      'https://visionart.app/artworks/${artwork.id}';
-
-  Future<void> _copyArtworkLink(ArtworkModel artwork) async {
-    final link = _artworkLink(artwork);
-    await Clipboard.setData(ClipboardData(text: link));
-    if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Artwork link copied')));
-  }
-
-  Future<void> _shareArtwork(ArtworkModel artwork) async {
-    final title = artwork.title?.trim().isNotEmpty == true
-        ? artwork.title!.trim()
-        : 'Untitled artwork';
-    final link = _artworkLink(artwork);
-    final caption = '$title\n$link';
-
-    if (!mounted) return;
-    showSocialShareSheet(
-      context: context,
-      link: link,
-      caption: caption,
-      subject: '$title – VisionArt',
-    );
-  }
-
-  Future<void> _downloadArtwork(ArtworkModel artwork) async {
-    final uri = Uri.tryParse(artwork.imageUrl);
-    if (uri == null) return;
-
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
-
-  void _openFollowers() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ProfileInspectScreen(
-          userId: widget.userId,
-          initialUser: _currentUser,
-          initialTabIndex: 1,
-        ),
-      ),
-    );
-  }
-
-  void _openFollowing() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ProfileInspectScreen(
-          userId: widget.userId,
-          initialUser: _currentUser,
-          initialTabIndex: 2,
-        ),
-      ),
-    );
-  }
-
-  void _openGallery() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ProfileInspectScreen(
-          userId: widget.userId,
-          initialUser: _currentUser,
-          initialTabIndex: 0,
-        ),
-      ),
-    );
-  }
 
   // Mock data for profile
   // static const int mockArtworksCount = 12; // Removed
@@ -251,13 +127,78 @@ class _ProfileScreenState extends State<ProfileScreen> {
     return '${months[date.month - 1]} ${date.year}';
   }
 
+  UserModel _buildCurrentUserModel(String userId) {
+    final now = DateTime.now();
+    return UserModel(
+      id: userId,
+      name: userName,
+      email: userEmail,
+      bio: userBio,
+      avatarUrl: avatarUrl,
+      isVerified: false,
+      isPrivateAccount: false,
+      followersCount: followersCount,
+      followingCount: followingCount,
+      publicGenerationsCount: artworksCount,
+      createdAt: createdAt ?? now,
+      updatedAt: now,
+    );
+  }
+
+  Future<void> _openInspectProfile(BuildContext context) async {
+    final currentUserId = AuthService.currentUserId;
+    if (currentUserId == null || currentUserId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to open inspect profile now.')),
+      );
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProfileInspectScreen(
+          userId: currentUserId,
+          initialUser: _buildCurrentUserModel(currentUserId),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openMyArtworks(BuildContext context) async {
+    final currentUserId = AuthService.currentUserId;
+    if (currentUserId == null || currentUserId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to open your artworks now.')),
+      );
+      return;
+    }
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ProfileArtworksOverviewScreen(
+          userId: currentUserId,
+          userName: userName,
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return SmokeBackground(
       child: SafeArea(
-        child: widget.isLoading
-            ? _buildShimmerLoading(context)
-            : _buildContent(context),
+        child: RefreshIndicator(
+          onRefresh: () async {
+            if (onRefreshProfile != null) {
+              await onRefreshProfile!();
+              return;
+            }
+            onProfileUpdated?.call();
+          },
+          child: isLoading
+              ? _buildShimmerLoading(context)
+              : _buildContent(context),
+        ),
       ),
     );
   }
@@ -266,6 +207,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final border = context.borderColor;
     final secondary = context.textSecondaryColor;
     return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.all(24),
       child: Column(
         children: [
@@ -340,6 +282,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final textPrimary = context.textPrimaryColor;
     final textSecondary = context.textSecondaryColor;
     return SingleChildScrollView(
+      physics: const AlwaysScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Column(
         children: [
@@ -357,27 +300,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 width: 2,
               ),
             ),
-            child: ClipOval(
-              child: widget.avatarUrl != null && widget.avatarUrl!.isNotEmpty
-                  ? Image.network(
-                      widget.avatarUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Icon(
-                        Icons.person_rounded,
-                        size: 48,
-                        color: Colors.white.withOpacity(0.9),
-                      ),
-                    )
-                  : Icon(
-                      Icons.person_rounded,
-                      size: 48,
-                      color: Colors.white.withOpacity(0.9),
-                    ),
+            child: Icon(
+              Icons.person_rounded,
+              size: 48,
+              color: Colors.white.withOpacity(0.9),
             ),
           ),
           const SizedBox(height: 16),
           Text(
-            widget.userName,
+            userName,
             style: Theme.of(context).textTheme.headlineSmall?.copyWith(
               color: textPrimary,
               fontWeight: FontWeight.w700,
@@ -385,14 +316,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            widget.userEmail,
+            userEmail,
             style: Theme.of(
               context,
             ).textTheme.bodyMedium?.copyWith(color: textSecondary),
           ),
           const SizedBox(height: 24),
           // Bio card
-          if (widget.userBio != null && widget.userBio!.isNotEmpty)
+          if (userBio != null && userBio!.isNotEmpty)
             _GlassCard(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -406,7 +337,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        widget.userBio!,
+                        userBio!,
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: textSecondary,
                           height: 1.4,
@@ -423,31 +354,101 @@ class _ProfileScreenState extends State<ProfileScreen> {
             children: [
               Expanded(
                 child: _StatCard(
-                  value: '${widget.artworksCount}',
+                  value: '$artworksCount',
                   label: 'Artworks',
                   icon: Icons.brush_rounded,
-                  onTap: _openGallery,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _StatCard(
-                  value: '${widget.followersCount}',
+                  value: '$followersCount',
                   label: 'Followers',
                   icon: Icons.people_rounded,
-                  onTap: _openFollowers,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _StatCard(
-                  value: '${widget.followingCount}',
+                  value: '$followingCount',
                   label: 'Following',
                   icon: Icons.person_add_rounded,
-                  onTap: _openFollowing,
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          _GlassCard(
+            child: ListTile(
+              leading: Icon(Icons.refresh_rounded, color: AppColors.lightBlue),
+              title: Text(
+                'Refresh profile',
+                style: TextStyle(
+                  color: textPrimary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              subtitle: Text(
+                'Update followers and following counts',
+                style: TextStyle(color: textSecondary, fontSize: 12),
+              ),
+              trailing: Icon(Icons.chevron_right, color: textSecondary),
+              onTap: () async {
+                if (onRefreshProfile != null) {
+                  await onRefreshProfile!();
+                } else {
+                  onProfileUpdated?.call();
+                }
+                if (!context.mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Profile updated')),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          _GlassCard(
+            child: ListTile(
+              leading: Icon(
+                Icons.person_search_rounded,
+                color: AppColors.lightBlue,
+              ),
+              title: Text(
+                'Inspect profile',
+                style: TextStyle(
+                  color: textPrimary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              subtitle: Text(
+                'Open your public profile view with gallery and followers',
+                style: TextStyle(color: textSecondary, fontSize: 12),
+              ),
+              trailing: Icon(Icons.chevron_right, color: textSecondary),
+              onTap: () => _openInspectProfile(context),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _GlassCard(
+            child: ListTile(
+              leading: Icon(
+                Icons.photo_library_rounded,
+                color: AppColors.nftAccent,
+              ),
+              title: Text(
+                'My artworks and purchases',
+                style: TextStyle(
+                  color: textPrimary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              subtitle: Text(
+                'See owned artworks and the artworks you bought',
+                style: TextStyle(color: textSecondary, fontSize: 12),
+              ),
+              trailing: Icon(Icons.chevron_right, color: textSecondary),
+              onTap: () => _openMyArtworks(context),
+            ),
           ),
           const SizedBox(height: 12),
           _GlassCard(
@@ -458,85 +459,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 size: 22,
               ),
               title: Text(
-                'Member since ${_formatDate(widget.createdAt)}',
+                'Member since ${_formatDate(createdAt)}',
                 style: TextStyle(
                   color: textPrimary,
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
                 ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          _GlassCard(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.auto_awesome_mosaic_rounded,
-                        color: AppColors.primaryBlue,
-                        size: 20,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'My creations hub',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                          color: textPrimary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const Spacer(),
-                      TextButton(
-                        onPressed: _openGallery,
-                        child: const Text('View all'),
-                      ),
-                    ],
-                  ),
-                  Text(
-                    'Manage your artworks: view, copy link, share, and download.',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.bodySmall?.copyWith(color: textSecondary),
-                  ),
-                  const SizedBox(height: 12),
-                  if (_isLoadingMyArtworks)
-                    const Center(child: CircularProgressIndicator())
-                  else if (_myArtworks.isEmpty)
-                    Text(
-                      'No artworks yet. Create your first piece from the Create tab.',
-                      style: TextStyle(color: textSecondary),
-                    )
-                  else
-                    SizedBox(
-                      height: 190,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: _myArtworks.length,
-                        separatorBuilder: (_, __) => const SizedBox(width: 10),
-                        itemBuilder: (_, index) {
-                          final artwork = _myArtworks[index];
-                          return _MyArtworkCard(
-                            artwork: artwork,
-                            onView: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) =>
-                                      ArtworkDetailScreen(artwork: artwork),
-                                ),
-                              );
-                            },
-                            onCopyLink: () => _copyArtworkLink(artwork),
-                            onShare: () => _shareArtwork(artwork),
-                            onDownload: () => _downloadArtwork(artwork),
-                          );
-                        },
-                      ),
-                    ),
-                ],
               ),
             ),
           ),
@@ -557,14 +485,51 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => EditProfileScreen(
-                      authService: widget.authService,
-                      initialName: widget.userName,
-                      initialEmail: widget.userEmail,
-                      initialBio: widget.userBio,
-                      initialAvatarUrl: widget.avatarUrl,
-                      initialPhoneNumber: widget.userPhoneNumber,
-                      initialWebsite: widget.userWebsite,
-                      onSaved: widget.onProfileUpdated ?? () {},
+                      authService: authService,
+                      initialName: userName,
+                      initialEmail: userEmail,
+                      initialBio: userBio,
+                      initialAvatarUrl: avatarUrl,
+                      initialPhoneNumber: userPhoneNumber,
+                      initialWebsite: userWebsite,
+                      onSaved: onProfileUpdated ?? () {},
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          _GlassCard(
+            child: ListTile(
+              leading: Icon(
+                Icons.palette_rounded,
+                color: AppColors.primaryBlue,
+              ),
+              title: Text(
+                'Mes préférences',
+                style: TextStyle(
+                  color: textPrimary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              subtitle: Text(
+                'Sujets, styles, couleurs, ambiance',
+                style: TextStyle(color: textSecondary, fontSize: 12),
+              ),
+              trailing: Icon(Icons.chevron_right, color: textSecondary),
+              onTap: () async {
+                final prefs = await PreferenceStorage.load();
+                if (!context.mounted) return;
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => PreferencesOnboardingScreen(
+                      authService: authService,
+                      initialPreferences: prefs,
+                      onComplete: () {
+                        Navigator.of(context).pop();
+                        onProfileUpdated?.call();
+                      },
                     ),
                   ),
                 );
@@ -641,7 +606,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 ),
               ),
               trailing: Icon(Icons.chevron_right, color: textSecondary),
-              onTap: widget.onToggleTheme,
+              onTap: onToggleTheme,
             ),
           ),
           _GlassCard(
@@ -659,11 +624,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (context) => PreferencesScreen(
-                      apiClient: widget.apiClient,
+                      apiClient: apiClient,
                       onPreferencesUpdated: () {
-                        widget.onProfileUpdated?.call();
+                        onProfileUpdated?.call();
                       },
-                      onThemeChanged: widget.onThemeChanged,
+                      onThemeChanged: onThemeChanged,
                     ),
                   ),
                 );
@@ -692,8 +657,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
               onTap: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) =>
-                        ReportScreen(authService: widget.authService),
+                    builder: (_) => ReportScreen(authService: authService),
                   ),
                 );
               },
@@ -705,7 +669,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             width: double.infinity,
             height: 48,
             child: OutlinedButton.icon(
-              onPressed: widget.onLogout,
+              onPressed: onLogout,
               icon: const Icon(Icons.logout_rounded, size: 20),
               label: const Text('Log out'),
               style: OutlinedButton.styleFrom(
@@ -720,11 +684,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 16),
           // Delete account
           TextButton(
-            onPressed: () => _showDeleteAccountDialog(
-              context,
-              widget.authService,
-              widget.onLogout,
-            ),
+            onPressed: () =>
+                _showDeleteAccountDialog(context, authService, onLogout),
             child: Text(
               'Supprimer mon compte',
               style: TextStyle(
@@ -782,206 +743,36 @@ class _StatCard extends StatelessWidget {
     required this.value,
     required this.label,
     required this.icon,
-    this.onTap,
   });
 
   final String value;
   final String label;
   final IconData icon;
-  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final textPrimary = context.textPrimaryColor;
     final textSecondary = context.textSecondaryColor;
-    return GestureDetector(
-      onTap: onTap,
-      child: _GlassCard(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-          child: Column(
-            children: [
-              Icon(icon, color: AppColors.primaryPurple, size: 28),
-              const SizedBox(height: 8),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  color: textPrimary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: textSecondary,
-                  fontSize: 12,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MyArtworkCard extends StatelessWidget {
-  const _MyArtworkCard({
-    required this.artwork,
-    required this.onView,
-    required this.onCopyLink,
-    required this.onShare,
-    required this.onDownload,
-  });
-
-  final ArtworkModel artwork;
-  final VoidCallback onView;
-  final VoidCallback onCopyLink;
-  final VoidCallback onShare;
-  final VoidCallback onDownload;
-
-  @override
-  Widget build(BuildContext context) {
-    final textPrimary = context.textPrimaryColor;
-    final textSecondary = context.textSecondaryColor;
-
-    return SizedBox(
-      width: 220,
-      child: _GlassCard(
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      CachedNetworkImage(
-                        imageUrl: artwork.imageUrl,
-                        fit: BoxFit.cover,
-                        width: double.infinity,
-                        height: double.infinity,
-                        errorWidget: (_, __, ___) => Container(
-                          color: context.surfaceColor,
-                          child: const Icon(Icons.image_not_supported_rounded),
-                        ),
-                      ),
-                      Positioned(
-                        top: 8,
-                        left: 8,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 3,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(0.4),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            artwork.isPublic ? 'Public' : 'Private',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                artwork.title?.trim().isNotEmpty == true
-                    ? artwork.title!.trim()
-                    : 'Untitled artwork',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: textPrimary,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${artwork.likesCount} likes • ${artwork.commentsCount} comments',
-                style: TextStyle(color: textSecondary, fontSize: 11),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  _QuickAction(
-                    label: 'View',
-                    icon: Icons.visibility_rounded,
-                    onTap: onView,
-                  ),
-                  _QuickAction(
-                    label: 'Copy',
-                    icon: Icons.link_rounded,
-                    onTap: onCopyLink,
-                  ),
-                  _QuickAction(
-                    label: 'Share',
-                    icon: Icons.share_rounded,
-                    onTap: onShare,
-                  ),
-                  _QuickAction(
-                    label: 'Download',
-                    icon: Icons.download_rounded,
-                    onTap: onDownload,
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _QuickAction extends StatelessWidget {
-  const _QuickAction({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        decoration: BoxDecoration(
-          color: context.surfaceColor.withOpacity(0.4),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: context.borderColor.withOpacity(0.4)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
+    return _GlassCard(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        child: Column(
           children: [
-            Icon(icon, size: 13, color: context.textSecondaryColor),
-            const SizedBox(width: 4),
+            Icon(icon, color: AppColors.primaryPurple, size: 28),
+            const SizedBox(height: 8),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: textPrimary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 2),
             Text(
               label,
-              style: TextStyle(
-                color: context.textSecondaryColor,
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: textSecondary,
+                fontSize: 12,
               ),
             ),
           ],
