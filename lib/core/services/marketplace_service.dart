@@ -380,6 +380,21 @@ class MarketplaceService {
     return Map<String, dynamic>.from(response.data as Map);
   }
 
+  Future<Map<String, dynamic>> mintArtworkNft({
+    required String artworkId,
+    String? recipientAddress,
+  }) async {
+    final response = await ApiClient.instance.post(
+      '/marketplace/nfts/mint',
+      data: {
+        'artworkId': artworkId,
+        if (recipientAddress != null && recipientAddress.trim().isNotEmpty)
+          'recipientAddress': recipientAddress.trim(),
+      },
+    );
+    return Map<String, dynamic>.from(response.data as Map);
+  }
+
   Future<Map<String, dynamic>> verifyTransaction(String txHash) async {
     final response = await ApiClient.instance.get(
       '/marketplace/transactions/$txHash/verify',

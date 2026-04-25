@@ -974,6 +974,14 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                         ? sellerName
                         : (isMine ? 'You' : 'Unknown artist');
 
+                    final artworkMetadata =
+                        artwork['metadata'] as Map<String, dynamic>?;
+                    final nftData =
+                        artworkMetadata?['nft'] as Map<String, dynamic>?;
+                    final isNft =
+                        nftData != null &&
+                        (nftData['tokenId'] ?? '').toString().isNotEmpty;
+
                     return _ListingCard(
                       title: (artwork['title'] ?? 'Untitled artwork')
                           .toString(),
@@ -985,6 +993,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                       negotiable: negotiable,
                       isMine: isMine,
                       status: status,
+                      isNft: isNft,
                       textPrimary: textPrimary,
                       textSecondary: textSecondary,
                       onReport: () {
@@ -1013,6 +1022,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> {
                               imageUrl: artwork['imageUrl']?.toString(),
                               imageColor: AppColors.polygonPurple,
                               negotiable: negotiable,
+                              nftData: isNft ? nftData : null,
                             ),
                           ),
                         );
@@ -1055,6 +1065,7 @@ class _ListingCard extends StatelessWidget {
     required this.status,
     required this.textPrimary,
     required this.textSecondary,
+    this.isNft = false,
     this.onTap,
     this.onReport,
     this.onBuy,
@@ -1073,6 +1084,7 @@ class _ListingCard extends StatelessWidget {
   final bool negotiable;
   final bool isMine;
   final String status;
+  final bool isNft;
   final Color textPrimary;
   final Color textSecondary;
   final VoidCallback? onTap;
@@ -1155,6 +1167,40 @@ class _ListingCard extends StatelessWidget {
                                 ),
                               ),
                       ),
+                      if (isNft)
+                        Positioned(
+                          top: 10,
+                          left: 10,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.nftAccent.withValues(alpha: 0.9),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.token_rounded,
+                                  size: 12,
+                                  color: Colors.white,
+                                ),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'NFT',
+                                  style: Theme.of(context).textTheme.labelSmall
+                                      ?.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       Positioned(
                         top: 10,
                         right: 10,

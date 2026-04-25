@@ -18,6 +18,7 @@ class ArtworkModel {
   final String? description;
   final String imageUrl;
   final String? thumbnailUrl;
+  final Map<String, dynamic>? metadata;
   @JsonKey(fromJson: _intFromJson)
   final int likesCount;
   @JsonKey(fromJson: _intFromJson)
@@ -41,6 +42,7 @@ class ArtworkModel {
     this.description,
     required this.imageUrl,
     this.thumbnailUrl,
+    this.metadata,
     required this.likesCount,
     required this.commentsCount,
     required this.remixCount,
@@ -65,6 +67,7 @@ class ArtworkModel {
     String? description,
     String? imageUrl,
     String? thumbnailUrl,
+    Map<String, dynamic>? metadata,
     int? likesCount,
     int? commentsCount,
     int? remixCount,
@@ -83,6 +86,7 @@ class ArtworkModel {
       description: description ?? this.description,
       imageUrl: imageUrl ?? this.imageUrl,
       thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      metadata: metadata ?? this.metadata,
       likesCount: likesCount ?? this.likesCount,
       commentsCount: commentsCount ?? this.commentsCount,
       remixCount: remixCount ?? this.remixCount,

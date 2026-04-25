@@ -18,6 +18,7 @@ class ArtDetailScreen extends StatefulWidget {
     this.imageUrl,
     required this.imageColor,
     required this.negotiable,
+    this.nftData,
   });
 
   final String title;
@@ -28,6 +29,7 @@ class ArtDetailScreen extends StatefulWidget {
   final String? imageUrl;
   final Color imageColor;
   final bool negotiable;
+  final Map<String, dynamic>? nftData;
 
   static PageRouteBuilder route(ArtDetailScreen screen) {
     return PageRouteBuilder(
@@ -35,18 +37,16 @@ class ArtDetailScreen extends StatefulWidget {
       barrierColor: Colors.black54,
       pageBuilder: (_, __, ___) => screen,
       transitionsBuilder: (_, animation, __, child) {
-        final fade = Tween<double>(begin: 0, end: 1).animate(
-          CurvedAnimation(parent: animation, curve: Curves.easeOut),
-        );
+        final fade = Tween<double>(
+          begin: 0,
+          end: 1,
+        ).animate(CurvedAnimation(parent: animation, curve: Curves.easeOut));
         final scale = Tween<double>(begin: 0.92, end: 1).animate(
           CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
         );
         return FadeTransition(
           opacity: fade,
-          child: ScaleTransition(
-            scale: scale,
-            child: child,
-          ),
+          child: ScaleTransition(scale: scale, child: child),
         );
       },
       transitionDuration: const Duration(milliseconds: 320),
@@ -133,37 +133,48 @@ class _ArtDetailScreenState extends State<ArtDetailScreen>
                                     imageColor: widget.imageColor,
                                     pulse: _pulseController,
                                   ),
-                                  Positioned(
-                                    top: 12,
-                                    left: 12,
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 10, vertical: 6),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.nftAccent.withOpacity(0.9),
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(color: Colors.white24),
-                                      ),
-                                      child: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(Icons.token_rounded,
-                                              size: 16, color: Colors.white),
-                                          const SizedBox(width: 6),
-                                          Text(
-                                            'NFT',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .labelMedium
-                                                ?.copyWith(
-                                                  color: Colors.white,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
+                                  if (widget.nftData != null)
+                                    Positioned(
+                                      top: 12,
+                                      left: 12,
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.nftAccent
+                                              .withOpacity(0.9),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
                                           ),
-                                        ],
+                                          border: Border.all(
+                                            color: Colors.white24,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.token_rounded,
+                                              size: 16,
+                                              color: Colors.white,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              'NFT',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .labelMedium
+                                                  ?.copyWith(
+                                                    color: Colors.white,
+                                                    fontWeight: FontWeight.w700,
+                                                  ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
-                                  ),
                                   Positioned(
                                     top: 12,
                                     right: 12,
@@ -180,7 +191,12 @@ class _ArtDetailScreenState extends State<ArtDetailScreen>
                                 ],
                               ),
                               Padding(
-                                padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+                                padding: const EdgeInsets.fromLTRB(
+                                  20,
+                                  20,
+                                  20,
+                                  24,
+                                ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -197,8 +213,11 @@ class _ArtDetailScreenState extends State<ArtDetailScreen>
                                     const SizedBox(height: 8),
                                     Row(
                                       children: [
-                                        Icon(Icons.fingerprint_rounded,
-                                            size: 16, color: textSecondary),
+                                        Icon(
+                                          Icons.fingerprint_rounded,
+                                          size: 16,
+                                          color: textSecondary,
+                                        ),
                                         const SizedBox(width: 8),
                                         Text(
                                           widget.artist,
@@ -213,21 +232,37 @@ class _ArtDetailScreenState extends State<ArtDetailScreen>
                                       ],
                                     ),
                                     const SizedBox(height: 6),
-                                    Text(
-                                      'AI-generated · Listed on chain',
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: AppColors.chainCyan
-                                                .withOpacity(0.9),
-                                          ),
-                                    ),
+                                    if (widget.nftData != null)
+                                      Text(
+                                        'AI-generated · Minted on-chain',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: AppColors.chainCyan
+                                                  .withOpacity(0.9),
+                                            ),
+                                      )
+                                    else
+                                      Text(
+                                        'AI-generated',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .bodySmall
+                                            ?.copyWith(
+                                              color: textSecondary.withOpacity(
+                                                0.9,
+                                              ),
+                                            ),
+                                      ),
                                     const SizedBox(height: 16),
                                     Row(
                                       children: [
-                                        Icon(Icons.monetization_on_rounded,
-                                            color: AppColors.ethGold, size: 24),
+                                        Icon(
+                                          Icons.monetization_on_rounded,
+                                          color: AppColors.ethGold,
+                                          size: 24,
+                                        ),
                                         const SizedBox(width: 8),
                                         Text(
                                           '${widget.price} ${widget.currency}',
@@ -248,7 +283,8 @@ class _ArtDetailScreenState extends State<ArtDetailScreen>
                                                 .textTheme
                                                 .bodyMedium
                                                 ?.copyWith(
-                                                    color: textSecondary),
+                                                  color: textSecondary,
+                                                ),
                                           ),
                                         ],
                                       ],
@@ -260,15 +296,18 @@ class _ArtDetailScreenState extends State<ArtDetailScreen>
                                           child: FilledButton.icon(
                                             onPressed: () {},
                                             icon: const Icon(
-                                                Icons.shopping_bag_rounded,
-                                                size: 20),
+                                              Icons.shopping_bag_rounded,
+                                              size: 20,
+                                            ),
                                             label: const Text('Buy now'),
                                             style: FilledButton.styleFrom(
                                               backgroundColor:
                                                   AppColors.chainCyan,
                                               foregroundColor: Colors.black87,
-                                              padding: const EdgeInsets.symmetric(
-                                                  vertical: 14),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 14,
+                                                  ),
                                               shape: RoundedRectangleBorder(
                                                 borderRadius:
                                                     BorderRadius.circular(12),
@@ -283,8 +322,9 @@ class _ArtDetailScreenState extends State<ArtDetailScreen>
                                                 ? () {}
                                                 : null,
                                             icon: const Icon(
-                                                Icons.handshake_rounded,
-                                                size: 18),
+                                              Icons.handshake_rounded,
+                                              size: 18,
+                                            ),
                                             label: Text(
                                               widget.negotiable
                                                   ? 'Negotiate'
@@ -297,11 +337,15 @@ class _ArtDetailScreenState extends State<ArtDetailScreen>
                                             style: OutlinedButton.styleFrom(
                                               foregroundColor:
                                                   AppColors.ethGold,
-                                              padding: const EdgeInsets.symmetric(
-                                                  horizontal: 8, vertical: 14),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 14,
+                                                  ),
                                               side: BorderSide(
-                                                  color: AppColors.ethGold
-                                                      .withOpacity(0.7)),
+                                                color: AppColors.ethGold
+                                                    .withOpacity(0.7),
+                                              ),
                                               shape: RoundedRectangleBorder(
                                                 borderRadius:
                                                     BorderRadius.circular(12),
