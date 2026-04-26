@@ -65,6 +65,62 @@ class _AudioGenButtonState extends State<AudioGenButton> {
   }
 }
 
+class AudioVisualizer extends StatefulWidget {
+  const AudioVisualizer({super.key});
+
+  @override
+  State<AudioVisualizer> createState() => _AudioVisualizerState();
+}
+
+class _AudioVisualizerState extends State<AudioVisualizer>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  final List<double> _heights = [0.2, 0.8, 0.4, 0.7, 0.3, 0.9, 0.5, 0.6];
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat(reverse: true);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (context, child) {
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: List.generate(_heights.length, (index) {
+            final double animatedHeight = 15 *
+                (0.3 +
+                    (_heights[index] * _controller.value) +
+                    (0.2 * (index % 3 == 0 ? 1 : 0.5)));
+
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 1.5),
+              width: 3,
+              height: animatedHeight,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.8),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            );
+          }),
+        );
+      },
+    );
+  }
+}
+
 class SimpleAudioPlayer extends StatefulWidget {
   const SimpleAudioPlayer({super.key, required this.url});
   final String url;
@@ -140,10 +196,20 @@ class _SimpleAudioPlayerState extends State<SimpleAudioPlayer> {
             icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white),
           ),
           const SizedBox(width: 12),
-          const Expanded(
-            child: Text(
-              'Musique générée par IA',
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Musique générée par IA',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                ),
+                if (_isPlaying) ...[
+                  const SizedBox(height: 8),
+                  const AudioVisualizer(),
+                ],
+              ],
             ),
           ),
           IconButton(

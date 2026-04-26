@@ -1,8 +1,8 @@
 import 'package:animate_do/animate_do.dart';
 import 'package:flutter/material.dart';
 import '../../../core/user_preferences.dart';
-import '../../../core/preference_storage.dart';
 import '../../../core/auth_service.dart';
+import '../../../core/preference_storage.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
 import 'package:visionart_mobile/presentation/screens/splash/widgets/app_background_wrapper.dart';
@@ -172,36 +172,94 @@ class _PreferencesOnboardingScreenState
   }
 
   Future<void> _complete() async {
+    if (_saving) return;
+
     setState(() {
       _saving = true;
-      _statusMessage = 'Enregistrement des préférences...';
+      _statusMessage = 'Enregistrement de vos préférences...';
     });
-    final p = UserPreferences(
-      subjects: _subjects,
-      styles: _styles,
-      colors: _colors,
-      mood: _mood,
-      complexity: _complexity,
-      permissions: _permissions,
-      onboardingComplete: true,
-    );
-    await PreferenceStorage.save(p);
+
     try {
+      // 1. Mark onboarding as complete IMMEDIATELY
+      final p = UserPreferences(
+        subjects: _subjects,
+        styles: _styles,
+        colors: _colors,
+        mood: _mood,
+        complexity: _complexity,
+        permissions: _permissions,
+        onboardingComplete: true,
+      );
+      await PreferenceStorage.save(p);
       await widget.authService.updatePreferences(p);
-      
-      setState(() => _statusMessage = 'Création de votre univers sonore par IA...');
-      final urls = await widget.authService.generatePlaylist();
-      
-      final pWithPlaylist = p.copyWith(playlistUrls: urls);
-      await PreferenceStorage.save(pWithPlaylist);
+
+      // 2. Then try to generate the playlist (Optional)
+      try {
+        setState(() => _statusMessage = 'Création de votre univers sonore par IA...');
+        final urls = await widget.authService.generatePlaylist();
+
+        // 3. Update with the generated playlist if successful
+        if (urls.isNotEmpty) {
+          final newPlaylist = SonicPlaylist(
+            id: DateTime.now().millisecondsSinceEpoch.toString(),
+            name: 'Mon Univers ${_styles.isNotEmpty ? _styles.first : "IA"}',
+            urls: urls,
+            mood: _mood,
+            styles: _styles,
+            colors: _colors,
+          );
+
+          final pWithPlaylist = p.copyWith(
+            playlistUrls: urls,
+            playlists: [...p.playlists, newPlaylist],
+          );
+          await PreferenceStorage.save(pWithPlaylist);
+          await widget.authService.updatePreferences(pWithPlaylist);
+        }
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Univers créé avec succès !'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      } catch (playlistError) {
+        print('Optional playlist generation failed: $playlistError');
+        // If it's a credit error (402), we just proceed without showing a scary error
+        // as the onboarding itself is already saved and complete.
+        if (mounted) {
+          String msg = 'Préférences enregistrées !';
+          if (playlistError.toString().contains('402')) {
+            msg += ' (L\'IA est temporairement indisponible pour la musique)';
+          }
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(msg),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
+      }
     } catch (e) {
-      print('Failed to generate playlist: $e');
-    }
-    
-    if (mounted) {
-      setState(() => _saving = false);
-      Navigator.of(context).pop();
-      widget.onComplete();
+      print('Failed during onboarding completion: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Erreur lors de la sauvegarde : $e'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _saving = false);
+        widget.onComplete();
+      }
     }
   }
 
@@ -876,17 +934,67 @@ class _PreferencesOnboardingScreenState
                 ),
               ),
             ),
-            if (_step == _totalSteps - 1)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: TextButton(
-                  onPressed: () => widget.onComplete(),
-                  child: Text(
-                    'Explorer sans générer',
-                    style: TextStyle(color: textSecondary, fontSize: 12),
+    if (_step == _totalSteps - 1)
+      Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: TextButton(
+          onPressed: _saving ? null : () async {
+            // Even if they don't generate, we should mark onboarding as complete
+            print('Explorer sans générer clicked');
+            setState(() {
+              _saving = true;
+              _statusMessage = 'Enregistrement de vos préférences...';
+            });
+            try {
+              final p = UserPreferences(
+                subjects: _subjects,
+                styles: _styles,
+                colors: _colors,
+                mood: _mood,
+                complexity: _complexity,
+                permissions: _permissions,
+                onboardingComplete: true,
+              );
+              print('Saving preferences local and remote...');
+              await PreferenceStorage.save(p);
+              await widget.authService.updatePreferences(p);
+              print('Preferences saved successfully');
+              
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Préférences enregistrées. Bienvenue !'),
+                    duration: Duration(seconds: 2),
                   ),
-                ),
-              ),
+                );
+              }
+            } catch (e) {
+              print('Failed to save preferences on skip: $e');
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Erreur lors de l\'enregistrement : $e'),
+                    backgroundColor: Colors.redAccent,
+                  ),
+                );
+              }
+            }
+            if (mounted) {
+              setState(() => _saving = false);
+              print('Calling onComplete');
+              widget.onComplete();
+            }
+          },
+          child: Text(
+            'Explorer sans générer',
+            style: TextStyle(
+              color: _saving ? textSecondary.withOpacity(0.5) : textSecondary, 
+              fontSize: 12,
+              decoration: TextDecoration.underline,
+            ),
+          ),
+        ),
+      ),
           ],
         ],
       ),

@@ -237,22 +237,7 @@ class _LoginCardState extends State<_LoginCard> {
       );
       if (mounted) {
         setState(() => _loading = false);
-        final shouldOnboard = await widget.authService.needsPreferencesOnboarding();
-        if (!mounted) return;
-        if (shouldOnboard) {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => PreferencesOnboardingScreen(
-                authService: widget.authService,
-                onComplete: () {
-                  widget.onSuccess();
-                },
-              ),
-            ),
-          );
-        } else {
-          widget.onSuccess();
-        }
+        widget.onSuccess();
       }
     } on ApiException catch (e) {
       if (mounted) {
@@ -313,24 +298,7 @@ class _LoginCardState extends State<_LoginCard> {
       await widget.authService.loginWithGoogle(idToken);
       if (mounted) {
         setState(() => _loading = false);
-        final shouldOnboard = await widget.authService
-            .needsPreferencesOnboarding();
-        if (!mounted) return;
-        if (shouldOnboard) {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => PreferencesOnboardingScreen(
-                authService: widget.authService,
-                onComplete: () {
-                  Navigator.of(context).pop();
-                  widget.onSuccess();
-                },
-              ),
-            ),
-          );
-        } else {
-          widget.onSuccess();
-        }
+        widget.onSuccess();
       }
     } on ApiException catch (e) {
       if (mounted) {
@@ -700,21 +668,7 @@ class _SignUpCardState extends State<_SignUpCard> {
       await widget.authService.loginWithGoogle(idToken);
       if (mounted) {
         setState(() => _loading = false);
-        final shouldOnboard = await widget.authService
-            .needsPreferencesOnboarding();
-        if (!mounted) return;
-        if (shouldOnboard) {
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (_) => PreferencesOnboardingScreen(
-                authService: widget.authService,
-                onComplete: widget.onSuccess,
-              ),
-            ),
-          );
-        } else {
-          widget.onSuccess();
-        }
+        widget.onSuccess();
       }
     } on ApiException catch (e) {
       if (mounted) {
@@ -753,17 +707,7 @@ class _SignUpCardState extends State<_SignUpCard> {
       );
       if (!mounted) return;
       setState(() => _loading = false);
-
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => PreferencesOnboardingScreen(
-            authService: widget.authService,
-            onComplete: () {
-              widget.onSuccess();
-            },
-          ),
-        ),
-      );
+      widget.onSuccess();
     } on ApiException catch (e) {
       if (mounted) {
         setState(() {

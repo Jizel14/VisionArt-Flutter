@@ -204,22 +204,68 @@ class AuthService {
     final token = await getToken;
     if (token == null) throw ApiException(401, 'Not logged in');
 
-    final response = await ApiClient.instance.get('/auth/me');
-    final data = Map<String, dynamic>.from(response.data['preferences'] ?? {});
+    try {
+      final response = await ApiClient.instance.get('/auth/me');
+      
+      final dynamic body = response.data;
+      if (body == null || body is! Map) {
+        return true;
+      }
 
-    final favoriteStyles = List<String>.from(
-      data['favoriteStyles'] as List? ?? const [],
-    );
-    final favoriteColors = List<String>.from(
-      data['favoriteColors'] as List? ?? const [],
-    );
-    final preferredMood = data['preferredMood'] as String?;
-    final lastStyleUpdate = data['lastStyleUpdate'];
+      final preferencesData = body['preferences'];
+      
+      if (preferencesData == null) {
+        return true;
+      }
+      
+      final data = Map<String, dynamic>.from(preferencesData is Map ? preferencesData : {});
 
-    return favoriteStyles.isEmpty &&
-        favoriteColors.isEmpty &&
-        (preferredMood == null || preferredMood.isEmpty) &&
-        lastStyleUpdate == null;
+    // Check if onboarding is explicitly marked as complete
+    // Be robust with types (bool, int, or string)
+    final onboardingComplete = data['onboardingComplete'];
+    if (onboardingComplete == true || 
+        onboardingComplete == 1 || 
+        onboardingComplete == 'true' ||
+        onboardingComplete == '1') {
+      return false;
+    }
+
+    // Fallback: Check if user has at least some preferences set
+    final favoriteStyles = data['favoriteStyles'] as List? ?? [];
+    final favoriteColors = data['favoriteColors'] as List? ?? [];
+    final styles = data['styles'] as List? ?? [];
+    final colors = data['colors'] as List? ?? [];
+    final subjects = data['subjects'] as List? ?? [];
+    final playlists = data['playlists'] as List? ?? [];
+    final playlistUrls = data['playlistUrls'] as List? ?? [];
+    
+    final preferredMood = data['preferredMood']?.toString() ?? '';
+    final mood = data['mood']?.toString() ?? '';
+    
+    // Legacy fields
+    final artComplexity = data['artComplexity']?.toString() ?? '';
+    final complexity = data['complexity']?.toString() ?? '';
+
+    // If ANY of these have data, we assume onboarding is NOT needed
+    final hasSomePrefs = favoriteStyles.isNotEmpty ||
+        favoriteColors.isNotEmpty ||
+        styles.isNotEmpty ||
+        colors.isNotEmpty ||
+        subjects.isNotEmpty ||
+        playlists.isNotEmpty ||
+        playlistUrls.isNotEmpty ||
+        preferredMood.isNotEmpty ||
+        mood.isNotEmpty ||
+        artComplexity.isNotEmpty ||
+        complexity.isNotEmpty;
+
+    return !hasSomePrefs;
+    } catch (e) {
+      print('Error checking onboarding status: $e');
+      // If we can't check, safer to assume they might need it, 
+      // but let's not block them if it's just a network error.
+      return false; 
+    }
   }
 
   Future<Map<String, dynamic>> updatePreferences(UserPreferences p) async {
@@ -230,13 +276,20 @@ class AuthService {
       'favoriteStyles': p.styles,
       'favoriteColors': p.colors,
       'preferredMood': p.mood,
+      'styles': p.styles,
+      'colors': p.colors,
+      'mood': p.mood,
+      'subjects': p.subjects,
+      'onboardingComplete': p.onboardingComplete,
       'artComplexity': _mapComplexityToBackend(p.complexity),
+      'complexity': _mapComplexityToBackend(p.complexity),
       'enableLocationContext': p.permissions.location,
       'enableWeatherContext': p.permissions.weather,
       'enableCalendarContext': p.permissions.calendar,
       'enableMusicContext': p.permissions.music,
       'enableTimeContext': p.permissions.timeOfDay,
       'playlistUrls': p.playlistUrls,
+      'playlists': p.playlists.map((e) => e.toJson()).toList(),
     };
 
     final response = await ApiClient.instance.patch(

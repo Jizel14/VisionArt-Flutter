@@ -20,6 +20,7 @@ import '../signature/signature_editor_screen.dart';
 import 'artwork_detail_screen.dart';
 import 'edit_profile_screen.dart';
 import 'profile_inspect_screen.dart';
+import 'widgets/sonic_universe_section.dart';
 
 Future<void> _showDeleteAccountDialog(
   BuildContext context,
@@ -534,9 +535,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           );
                         },
                       ),
-                    ),
+                  ),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 20),
+          _GlassCard(
+            child: const Padding(
+              padding: EdgeInsets.all(16),
+              child: SonicUniverseSection(),
             ),
           ),
           const SizedBox(height: 20),

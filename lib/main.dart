@@ -10,6 +10,7 @@ import 'package:visionart_mobile/presentation/theme/app_theme.dart';
 import 'package:visionart_mobile/presentation/screens/splash/splash_screen.dart';
 import 'package:visionart_mobile/presentation/screens/auth/auth_screen.dart';
 import 'package:visionart_mobile/presentation/screens/preferences/preferences_screen.dart';
+import 'package:visionart_mobile/presentation/screens/preferences/preferences_onboarding_screen.dart';
 import 'package:visionart_mobile/screens/home_screen.dart';
 
 const String _keyThemeMode = 'theme_mode';
@@ -209,6 +210,7 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   bool _checked = false;
   bool _loggedIn = false;
+  bool _needsOnboarding = false;
 
   @override
   void initState() {
@@ -218,21 +220,47 @@ class _AuthGateState extends State<AuthGate> {
 
   Future<void> _checkAuth() async {
     final ok = await widget.authService.isLoggedIn;
+    bool needsOnboarding = false;
+
+    if (ok) {
+      try {
+        needsOnboarding = await widget.authService.needsPreferencesOnboarding();
+      } catch (e) {
+        print('Error checking onboarding in AuthGate: $e');
+      }
+    }
 
     if (mounted) {
       setState(() {
         _checked = true;
         _loggedIn = ok;
+        _needsOnboarding = needsOnboarding;
       });
     }
   }
 
-  void _goHome() {
-    setState(() => _loggedIn = true);
+  Future<void> _goHome() async {
+    bool needsOnboarding = false;
+    try {
+      needsOnboarding = await widget.authService.needsPreferencesOnboarding();
+    } catch (e) {
+      print('Error checking onboarding in _goHome: $e');
+    }
+
+    if (mounted) {
+      setState(() {
+        _needsOnboarding = needsOnboarding;
+        _checked = true;
+        _loggedIn = true;
+      });
+    }
   }
 
   void _goLogin() {
-    setState(() => _loggedIn = false);
+    setState(() {
+      _loggedIn = false;
+      _needsOnboarding = false;
+    });
   }
 
   @override
@@ -244,6 +272,13 @@ class _AuthGateState extends State<AuthGate> {
     }
 
     if (_loggedIn) {
+      if (_needsOnboarding) {
+        return PreferencesOnboardingScreen(
+          authService: widget.authService,
+          onComplete: _goHome,
+        );
+      }
+
       return HomeScreen(
         authService: widget.authService,
         onLogout: _goLogin,

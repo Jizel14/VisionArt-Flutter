@@ -278,6 +278,32 @@ class _GalleryItem extends StatelessWidget {
                 : Container(color: AppColors.border),
           ),
 
+          // Visual Indicator for Audio
+          if (artwork.audioUrl != null)
+            Positioned(
+              top: 12,
+              left: 12,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(20),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryPurple.withOpacity(0.4),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white.withOpacity(0.2)),
+                    ),
+                    child: const Icon(
+                      Icons.music_note_rounded,
+                      color: Colors.white,
+                      size: 14,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+
           // Magical Bottom Gradient overlay
           Positioned.fill(
             child: Container(
@@ -495,6 +521,7 @@ class _ArtworkDetailsBottomSheetState
   @override
   void initState() {
     super.initState();
+    _audioUrl = widget.artwork.audioUrl;
     _loadSimilarArtworks();
   }
 
@@ -692,15 +719,30 @@ class _ArtworkDetailsBottomSheetState
                                 color: Colors.white.withOpacity(0.1), width: 1),
                           ),
                           clipBehavior: Clip.antiAlias,
-                          child: InteractiveViewer(
-                            child: imageProvider != null
-                                ? Image(
-                                    image: imageProvider,
-                                    width: double.infinity,
-                                    fit: BoxFit.cover,
-                                  )
-                                : Container(
-                                    height: 300, color: AppColors.border),
+                          child: Stack(
+                            alignment: Alignment.bottomCenter,
+                            children: [
+                              InteractiveViewer(
+                                child: imageProvider != null
+                                    ? Image(
+                                        image: imageProvider,
+                                        width: double.infinity,
+                                        fit: BoxFit.cover,
+                                      )
+                                    : Container(
+                                        height: 300, color: AppColors.border),
+                              ),
+                              if (_audioUrl != null)
+                                Positioned(
+                                  bottom: 16,
+                                  left: 16,
+                                  right: 16,
+                                  child: FadeInUp(
+                                    duration: const Duration(milliseconds: 500),
+                                    child: SimpleAudioPlayer(url: _audioUrl!),
+                                  ),
+                                ),
+                            ],
                           ),
                         ),
                       ),
