@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_vision_craft/flutter_vision_craft.dart';
 
 import '../../../core/visioncraft_service.dart';
 import '../../../features/subscription/models/subscription_model.dart';
