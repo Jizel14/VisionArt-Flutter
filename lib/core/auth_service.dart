@@ -2,6 +2,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dio/dio.dart';
 import 'api_client.dart';
 import 'user_preferences.dart';
+import 'preference_storage.dart';
 
 class AuthService {
   AuthService({SharedPreferences? prefs}) : _prefs = prefs;
@@ -58,6 +59,15 @@ class AuthService {
     final user = Map<String, dynamic>.from(response.data['user'] ?? {});
     currentUserId = user['id'] as String?;
 
+    // IMPORTANT: Clear old local preferences first to avoid conflicts between accounts
+    await PreferenceStorage.clear();
+
+    // Save preferences to local storage if present
+    if (user['preferences'] != null) {
+      final prefs = _mapBackendToOnboardingPrefs(Map<String, dynamic>.from(user['preferences']));
+      await PreferenceStorage.save(prefs);
+    }
+
     return AuthResult(token: token, user: user);
   }
 
@@ -79,6 +89,15 @@ class AuthService {
     final user = Map<String, dynamic>.from(response.data['user'] ?? {});
     currentUserId = user['id'] as String?;
 
+    // IMPORTANT: Clear old local preferences first to avoid conflicts between accounts
+    await PreferenceStorage.clear();
+
+    // Save preferences to local storage if present
+    if (user['preferences'] != null) {
+      final prefs = _mapBackendToOnboardingPrefs(Map<String, dynamic>.from(user['preferences']));
+      await PreferenceStorage.save(prefs);
+    }
+
     return AuthResult(token: token, user: user);
   }
 
@@ -95,6 +114,15 @@ class AuthService {
 
     final user = Map<String, dynamic>.from(response.data['user'] ?? {});
     currentUserId = user['id'] as String?;
+
+    // IMPORTANT: Clear old local preferences first to avoid conflicts between accounts
+    await PreferenceStorage.clear();
+
+    // Save preferences to local storage if present
+    if (user['preferences'] != null) {
+      final prefs = _mapBackendToOnboardingPrefs(Map<String, dynamic>.from(user['preferences']));
+      await PreferenceStorage.save(prefs);
+    }
 
     return AuthResult(token: token, user: user);
   }
@@ -173,12 +201,19 @@ class AuthService {
   }
 
   UserPreferences _mapBackendToOnboardingPrefs(Map<String, dynamic> data) {
+    // Determine onboarding status from backend data
+    final onboardingValue = data['onboardingComplete'];
+    final bool isComplete = onboardingValue == true || 
+                            onboardingValue == 1 || 
+                            onboardingValue == 'true' ||
+                            onboardingValue == '1';
+
     return UserPreferences(
-      subjects: const [],
-      styles: List<String>.from(data['favoriteStyles'] as List? ?? const []),
-      colors: List<String>.from(data['favoriteColors'] as List? ?? const []),
-      mood: data['preferredMood'] as String?,
-      complexity: _mapComplexityFromBackend(data['artComplexity'] as String?),
+      subjects: List<String>.from(data['subjects'] as List? ?? const []),
+      styles: List<String>.from(data['favoriteStyles'] as List? ?? data['styles'] as List? ?? const []),
+      colors: List<String>.from(data['favoriteColors'] as List? ?? data['colors'] as List? ?? const []),
+      mood: data['preferredMood'] as String? ?? data['mood'] as String?,
+      complexity: _mapComplexityFromBackend(data['artComplexity'] as String? ?? data['complexity'] as String?),
       permissions: PreferencePermissions(
         location: data['enableLocationContext'] as bool? ?? false,
         weather: data['enableWeatherContext'] as bool? ?? false,
@@ -187,7 +222,8 @@ class AuthService {
         timeOfDay: data['enableTimeContext'] as bool? ?? true,
         gallery: false,
       ),
-      onboardingComplete: true,
+      onboardingComplete: isComplete,
+      playlistUrls: List<String>.from(data['playlistUrls'] as List? ?? const []),
     );
   }
 
@@ -227,44 +263,15 @@ class AuthService {
         onboardingComplete == 1 || 
         onboardingComplete == 'true' ||
         onboardingComplete == '1') {
-      return false;
+      return false; // Onboarding explicitly complete
     }
 
-    // Fallback: Check if user has at least some preferences set
-    final favoriteStyles = data['favoriteStyles'] as List? ?? [];
-    final favoriteColors = data['favoriteColors'] as List? ?? [];
-    final styles = data['styles'] as List? ?? [];
-    final colors = data['colors'] as List? ?? [];
-    final subjects = data['subjects'] as List? ?? [];
-    final playlists = data['playlists'] as List? ?? [];
-    final playlistUrls = data['playlistUrls'] as List? ?? [];
-    
-    final preferredMood = data['preferredMood']?.toString() ?? '';
-    final mood = data['mood']?.toString() ?? '';
-    
-    // Legacy fields
-    final artComplexity = data['artComplexity']?.toString() ?? '';
-    final complexity = data['complexity']?.toString() ?? '';
-
-    // If ANY of these have data, we assume onboarding is NOT needed
-    final hasSomePrefs = favoriteStyles.isNotEmpty ||
-        favoriteColors.isNotEmpty ||
-        styles.isNotEmpty ||
-        colors.isNotEmpty ||
-        subjects.isNotEmpty ||
-        playlists.isNotEmpty ||
-        playlistUrls.isNotEmpty ||
-        preferredMood.isNotEmpty ||
-        mood.isNotEmpty ||
-        artComplexity.isNotEmpty ||
-        complexity.isNotEmpty;
-
-    return !hasSomePrefs;
+    // If it's not explicitly complete, we assume it's needed
+    // This is safer for new registrations
+    return true;
     } catch (e) {
       print('Error checking onboarding status: $e');
-      // If we can't check, safer to assume they might need it, 
-      // but let's not block them if it's just a network error.
-      return false; 
+      rethrow; 
     }
   }
 

@@ -4,7 +4,6 @@ import 'package:flutter/services.dart';
 import 'package:visionart_mobile/presentation/theme/app_colors.dart';
 import 'package:visionart_mobile/presentation/theme/theme_extensions.dart';
 import 'package:visionart_mobile/presentation/screens/splash/widgets/app_background_wrapper.dart';
-import 'package:visionart_mobile/presentation/screens/preferences/preferences_onboarding_screen.dart';
 import 'package:visionart_mobile/presentation/widgets/custom_painters/smoke_painter.dart';
 import 'package:visionart_mobile/core/api_client.dart';
 import 'package:visionart_mobile/core/auth_service.dart';

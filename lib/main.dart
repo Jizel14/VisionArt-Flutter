@@ -6,6 +6,7 @@ import 'package:visionart_mobile/core/api_client.dart';
 import 'package:visionart_mobile/core/auth_service.dart';
 import 'package:visionart_mobile/core/app_config.dart';
 import 'package:visionart_mobile/core/signature_storage.dart';
+import 'package:visionart_mobile/core/preference_storage.dart';
 import 'package:visionart_mobile/presentation/theme/app_theme.dart';
 import 'package:visionart_mobile/presentation/screens/splash/splash_screen.dart';
 import 'package:visionart_mobile/presentation/screens/auth/auth_screen.dart';
@@ -224,9 +225,17 @@ class _AuthGateState extends State<AuthGate> {
 
     if (ok) {
       try {
-        needsOnboarding = await widget.authService.needsPreferencesOnboarding();
+        final localPrefs = await PreferenceStorage.load();
+        if (localPrefs.onboardingComplete) {
+          needsOnboarding = false;
+        } else {
+          // If not complete locally, check the server
+          needsOnboarding = await widget.authService.needsPreferencesOnboarding();
+        }
       } catch (e) {
         print('Error checking onboarding in AuthGate: $e');
+        // If error, stay on false to not block existing users if server is down
+        needsOnboarding = false;
       }
     }
 
@@ -240,11 +249,18 @@ class _AuthGateState extends State<AuthGate> {
   }
 
   Future<void> _goHome() async {
-    bool needsOnboarding = false;
+    bool needsOnboarding = true; // Default to true for new login/registration
     try {
-      needsOnboarding = await widget.authService.needsPreferencesOnboarding();
+      final localPrefs = await PreferenceStorage.load();
+      if (localPrefs.onboardingComplete) {
+        needsOnboarding = false;
+      } else {
+        needsOnboarding = await widget.authService.needsPreferencesOnboarding();
+      }
     } catch (e) {
       print('Error checking onboarding in _goHome: $e');
+      // If we can't check, but we know it's not complete locally, 
+      // maybe we should stay on true or check again.
     }
 
     if (mounted) {

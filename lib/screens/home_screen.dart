@@ -9,6 +9,7 @@ import '../presentation/screens/create/create_art_screen.dart';
 import '../presentation/screens/gallery/gallery_screen.dart';
 import '../presentation/screens/marketplace/marketplace_screen.dart';
 import '../presentation/screens/profile/profile_screen.dart';
+import '../presentation/screens/create/style_transfer_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -32,10 +33,39 @@ class _HomeScreenState extends State<HomeScreen> {
   bool _loading = true;
   String? _error;
 
+  // Double-tap detection for Style Transfer
+  DateTime? _lastCreateTap;
+
   @override
   void initState() {
     super.initState();
     _loadProfile();
+  }
+
+  void _onTabTapped(int index) {
+    if (index == 1) { // Create tab
+      final now = DateTime.now();
+      if (_lastCreateTap != null && 
+          now.difference(_lastCreateTap!) < const Duration(milliseconds: 400)) {
+        // Double tap detected!
+        _lastCreateTap = null;
+        _showStyleTransferMode();
+        return;
+      }
+      _lastCreateTap = now;
+    } else {
+      _lastCreateTap = null;
+    }
+
+    setState(() {
+      _currentIndex = index;
+    });
+  }
+
+  void _showStyleTransferMode() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const StyleTransferScreen()),
+    );
   }
 
   Future<void> _loadProfile() async {
@@ -140,7 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       bottomNavigationBar: _ThemedBottomNav(
         currentIndex: _currentIndex,
-        onTap: (i) => setState(() => _currentIndex = i),
+        onTap: _onTabTapped,
       ),
     );
   }

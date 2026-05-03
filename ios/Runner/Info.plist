@@ -45,5 +45,11 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Cette application nécessite l'accès à votre galerie pour transformer vos photos en œuvres d'art.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Cette application nécessite l'accès à votre appareil photo pour prendre des photos et les transformer en œuvres d'art.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Cette application nécessite l'accès au microphone (requis par la bibliothèque de sélection d'images).</string>
 </dict>
 </plist>

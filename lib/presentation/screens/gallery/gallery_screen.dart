@@ -663,6 +663,15 @@ class _ArtworkDetailsBottomSheetState
       clipBehavior: Clip.antiAlias,
       child: Stack(
         children: [
+          // Bouton de retour
+          Positioned(
+            top: 12,
+            left: 12,
+            child: IconButton(
+              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ),
           // Blurred background
           if (imageProvider != null)
             Positioned.fill(

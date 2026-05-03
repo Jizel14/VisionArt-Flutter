@@ -136,4 +136,79 @@ class VisionCraftService {
       rethrow;
     }
   }
+
+  /// Get critique for an existing artwork
+  Future<Map<String, dynamic>?> getCritique(String artworkId) async {
+    try {
+      final response = await ApiClient.instance.post(
+        '/social/artworks/$artworkId/critique',
+      );
+      final data = response.data;
+      if (data != null && data['success'] == true) {
+        return {
+          'title': data['title'],
+          'interpretation': data['interpretation'],
+          'suggestions': List<String>.from(data['suggestions'] ?? []),
+        };
+      }
+      return null;
+    } catch (e) {
+      if (e is DioException && e.response?.data != null) {
+        final backendError = e.response!.data['message'];
+        if (backendError != null) throw Exception(backendError);
+      }
+      rethrow;
+    }
+  }
+
+  /// Get storytelling scenarios for an existing artwork
+  Future<List<String>?> getStorytellingScenarios(String artworkId) async {
+    try {
+      final response = await ApiClient.instance.post(
+        '/social/artworks/$artworkId/storytelling-scenarios',
+      );
+      final data = response.data;
+      if (data != null && data['success'] == true) {
+        return List<String>.from(data['scenarios'] ?? []);
+      }
+      return null;
+    } catch (e) {
+      if (e is DioException && e.response?.data != null) {
+        final backendError = e.response!.data['message'];
+        if (backendError != null) throw Exception(backendError);
+      }
+      rethrow;
+    }
+  }
+
+  /// Apply style transfer from an artist to a user image.
+  Future<Map<String, dynamic>?> applyStyleTransfer({
+    required String imageB64,
+    required String artistName,
+  }) async {
+    try {
+      final response = await ApiClient.instance.post(
+        '/social/artworks/style-transfer',
+        data: {
+          'imageB64': imageB64,
+          'artistName': artistName,
+        },
+      );
+
+      final data = response.data;
+      if (data != null && data['success'] == true && data['imageB64'] != null) {
+        return {
+          'imageBytes': base64Decode(data['imageB64'] as String),
+          'artworkId': data['artworkId'],
+        };
+      }
+      return null;
+    } catch (e) {
+      if (e is DioException && e.response?.data != null) {
+        final backendError = e.response!.data['message'];
+        if (backendError != null) throw Exception(backendError);
+      }
+      rethrow;
+    }
+  }
 }

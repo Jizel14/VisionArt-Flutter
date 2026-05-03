@@ -183,7 +183,14 @@ class _ResultViewState extends State<_ResultView> {
   bool _isGeneratingAudio = false;
   String? _audioUrl;
 
+  // NEW: Critique & Storytelling State
+  bool _isAnalyzing = false;
+  Map<String, dynamic>? _critique;
+  bool _isGeneratingScenarios = false;
+  List<String>? _scenarios;
+
   final _artworkService = ArtworkService();
+  final _visionCraft = VisionCraftService();
   List<ArtworkModel> _similarArtworks = [];
   bool _loadingSimilar = false;
   bool _similarLoaded = false;
@@ -194,6 +201,137 @@ class _ResultViewState extends State<_ResultView> {
     if (widget.artworkId != null) {
       _fetchSimilarArtworks();
     }
+  }
+
+  Future<void> _fetchCritique() async {
+    if (widget.artworkId == null) return;
+    setState(() => _isAnalyzing = true);
+    try {
+      final result = await _visionCraft.getCritique(widget.artworkId!);
+      if (mounted) {
+        setState(() {
+          _critique = result;
+          _isAnalyzing = false;
+        });
+        _showCritiqueDialog();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isAnalyzing = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur d\'analyse : $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _fetchScenarios() async {
+    if (widget.artworkId == null) return;
+    setState(() => _isGeneratingScenarios = true);
+    try {
+      final result = await _visionCraft.getStorytellingScenarios(widget.artworkId!);
+      if (mounted) {
+        setState(() {
+          _scenarios = result;
+          _isGeneratingScenarios = false;
+        });
+        _showScenariosSheet();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isGeneratingScenarios = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur Storytelling : $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  void _showCritiqueDialog() {
+    if (_critique == null) return;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        title: Row(
+          children: [
+            const Icon(Icons.auto_awesome, color: Colors.amber),
+            const SizedBox(width: 12),
+            Expanded(child: Text(_critique!['title'], style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_critique!['interpretation'], style: const TextStyle(color: Colors.white70, fontStyle: FontStyle.italic)),
+            const SizedBox(height: 20),
+            const Text('Styles & Influences :', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: (_critique!['suggestions'] as List).map((s) => Chip(
+                label: Text(s, style: const TextStyle(fontSize: 11, color: Colors.white)),
+                backgroundColor: Colors.white.withOpacity(0.1),
+                side: BorderSide.none,
+              )).toList(),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Fermer', style: TextStyle(color: AppColors.primaryPurple))),
+        ],
+      ),
+    );
+  }
+
+  void _showScenariosSheet() {
+    if (_scenarios == null) return;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1A1A2E),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(32))),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('La suite de l\'histoire...', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            const Text('Choisissez un scénario pour générer la scène suivante :', style: TextStyle(color: Colors.white60, fontSize: 14)),
+            const SizedBox(height: 24),
+            ..._scenarios!.map((s) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: InkWell(
+                onTap: () {
+                  Navigator.pop(ctx);
+                  // We could trigger a new generation here with this prompt
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Génération : $s')));
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withOpacity(0.1)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.auto_stories, color: Colors.blueAccent, size: 20),
+                      const SizedBox(width: 16),
+                      Expanded(child: Text(s, style: const TextStyle(color: Colors.white, fontSize: 14))),
+                      const Icon(Icons.chevron_right, color: Colors.white24),
+                    ],
+                  ),
+                ),
+              ),
+            )).toList(),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _fetchSimilarArtworks() async {
@@ -476,6 +614,24 @@ class _ResultViewState extends State<_ResultView> {
                             }),
                             onError: () => setState(() => _isGeneratingAudio = false),
                           ),
+                        const SizedBox(width: 12),
+                        // NEW: Critique & Storytelling Buttons
+                        if (widget.artworkId != null) ...[
+                          _FeatureButton(
+                            icon: Icons.psychology_outlined,
+                            onTap: _fetchCritique,
+                            isLoading: _isAnalyzing,
+                            color: Colors.amber.withOpacity(0.2),
+                          ),
+                          const SizedBox(width: 12),
+                          _FeatureButton(
+                            icon: Icons.history_edu_outlined,
+                            onTap: _fetchScenarios,
+                            isLoading: _isGeneratingScenarios,
+                            color: Colors.blueAccent.withOpacity(0.2),
+                          ),
+                          const SizedBox(width: 12),
+                        ],
                         const SizedBox(width: 12),
                         Container(
                           decoration: BoxDecoration(
@@ -843,5 +999,50 @@ class _SimilarArtworkSheet extends StatelessWidget {
 
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year}';
+  }
+}
+
+class _FeatureButton extends StatelessWidget {
+  const _FeatureButton({
+    required this.icon,
+    required this.onTap,
+    required this.isLoading,
+    required this.color,
+  });
+
+  final IconData icon;
+  final VoidCallback onTap;
+  final bool isLoading;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.1)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: isLoading ? null : onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: isLoading
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : Icon(icon, color: Colors.white, size: 24),
+          ),
+        ),
+      ),
+    );
   }
 }
