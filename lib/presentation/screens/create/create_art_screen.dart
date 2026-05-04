@@ -1,14 +1,19 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter_vision_craft/flutter_vision_craft.dart';
 
-import '../../../core/visioncraft_service.dart';
+import '../../../core/api_client.dart';
+import '../../../core/services/image_generation_service.dart';
+import '../../../core/visioncraft_service.dart' show AIStyles;
+import '../../../features/subscription/models/subscription_model.dart';
+import '../../../features/subscription/services/subscription_service.dart';
+import '../../../features/subscription/widgets/quota_banner_widget.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
 import '../splash/widgets/smoke_background.dart';
 
-/// Create New Art screen: prompt input, style picker, generate via VisionCraft API.
+/// Create New Art screen — sends prompt to backend (`/image-generation/generate`)
+/// which proxies to HuggingFace FLUX.1-schnell. No client-side AI key needed.
 class CreateArtScreen extends StatefulWidget {
   const CreateArtScreen({super.key});
 
@@ -17,7 +22,7 @@ class CreateArtScreen extends StatefulWidget {
 }
 
 class _CreateArtScreenState extends State<CreateArtScreen> {
-  late final VisionCraftService _visionCraft;
+  final _imageGen = ImageGenerationService();
   final _promptController = TextEditingController();
   final _negativePromptController = TextEditingController();
 
@@ -26,10 +31,21 @@ class _CreateArtScreenState extends State<CreateArtScreen> {
   Uint8List? _generatedImage;
   AIStyles _selectedStyle = AIStyles.abstract;
 
+  SubscriptionModel? _subscription;
+
   @override
   void initState() {
     super.initState();
-    _visionCraft = VisionCraftService();
+    _loadSubscription();
+  }
+
+  Future<void> _loadSubscription() async {
+    try {
+      final sub = await SubscriptionService().getMySubscription();
+      if (mounted) setState(() => _subscription = sub);
+    } catch (_) {
+      // Non-critical — server-side enforcement still applies.
+    }
   }
 
   @override
@@ -48,9 +64,9 @@ class _CreateArtScreenState extends State<CreateArtScreen> {
       });
       return;
     }
-    if (!_visionCraft.isConfigured) {
+    if (_subscription != null && _subscription!.quotaExceeded) {
       setState(() {
-        _error = 'VisionCraft API key not set. Use --dart-define=VISIONCRAFT_API_KEY=your_key';
+        _error = null;
         _generatedImage = null;
       });
       return;
@@ -61,27 +77,32 @@ class _CreateArtScreenState extends State<CreateArtScreen> {
       _generatedImage = null;
     });
     try {
-      final result = await _visionCraft.generateImage(
+      final result = await _imageGen.generateImage(
         prompt: prompt,
-        aiStyle: _selectedStyle,
         negativePrompt: _negativePromptController.text.trim().isEmpty
             ? null
             : _negativePromptController.text.trim(),
-        nsfwFilter: true,
-        watermark: false,
+        style: _styleApiValue(_selectedStyle),
+        aspectRatio: 'square',
+        quality: 4,
       );
       if (mounted) {
         setState(() {
           _loading = false;
           _generatedImage = result;
-          _error = result == null ? 'Failed to generate image' : null;
+        });
+      }
+    } on ApiException catch (e) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = e.message;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
           _loading = false;
-          _generatedImage = null;
           _error = e.toString();
         });
       }
@@ -119,36 +140,17 @@ class _CreateArtScreenState extends State<CreateArtScreen> {
                 ],
               ),
             ),
+            if (_subscription != null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                child: QuotaBanner(subscription: _subscription!),
+              ),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (!_visionCraft.isConfigured)
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: AppColors.error.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.error.withOpacity(0.5)),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.info_outline_rounded, color: AppColors.error, size: 22),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Set VISIONCRAFT_API_KEY (from VisionCraft Telegram bot) to generate images.',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: textPrimary,
-                                    ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     Text(
                       'Describe your idea',
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
@@ -218,7 +220,7 @@ class _CreateArtScreenState extends State<CreateArtScreen> {
                           ),
                         ),
                         dropdownColor: cardBg,
-                        items: VisionCraftService.availableStyles.map((s) {
+                        items: AIStyles.values.map((s) {
                           return DropdownMenuItem(
                             value: s,
                             child: Text(
@@ -241,7 +243,10 @@ class _CreateArtScreenState extends State<CreateArtScreen> {
                     SizedBox(
                       height: 50,
                       child: FilledButton.icon(
-                        onPressed: _loading || !_visionCraft.isConfigured ? null : _generate,
+                        onPressed: _loading ||
+                                (_subscription?.quotaExceeded ?? false)
+                            ? null
+                            : _generate,
                         icon: _loading
                             ? const SizedBox(
                                 width: 22,
@@ -295,5 +300,20 @@ class _CreateArtScreenState extends State<CreateArtScreen> {
       (m) => ' ${m.group(1)}',
     );
     return '${withSpaces[0].toUpperCase()}${withSpaces.substring(1).toLowerCase()}'.trim();
+  }
+
+  /// Map enum -> backend style key (matches values handled in
+  /// backend ImageGenerationService.generateImage)
+  static String? _styleApiValue(AIStyles s) {
+    switch (s) {
+      case AIStyles.anime:
+        return 'anime';
+      case AIStyles.digitalArt:
+        return 'dreamescape';
+      case AIStyles.sketch:
+        return 'lineArt';
+      default:
+        return null;
+    }
   }
 }

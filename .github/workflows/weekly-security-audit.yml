@@ -1,0 +1,81 @@
+name: Weekly dependency audit
+
+on:
+  schedule:
+    - cron: "0 3 * * 1" # Mondays 03:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  weekly-flutter-security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: 'stable'
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Outdated (JSON)
+        run: flutter pub outdated --json > flutter-outdated.json
+
+      - name: OSV scan (Pub)
+        run: |
+          python3 << 'EOF'
+          import json, urllib.request, yaml
+
+          with open('pubspec.lock', 'r') as f:
+              lock = yaml.safe_load(f)
+
+          packages = lock.get('packages', {})
+          vulnerabilities = []
+
+          for pkg_name, pkg_info in packages.items():
+              version = pkg_info.get('version', '')
+              payload = json.dumps({
+                  "package": {"name": pkg_name, "ecosystem": "Pub"},
+                  "version": version
+              }).encode()
+              
+              req = urllib.request.Request(
+                  'https://api.osv.dev/v1/query',
+                  data=payload,
+                  headers={'Content-Type': 'application/json'},
+                  method='POST'
+              )
+              try:
+                  with urllib.request.urlopen(req, timeout=5) as resp:
+                      result = json.loads(resp.read())
+                      if result.get('vulns'):
+                          vulnerabilities.append({
+                              'package': pkg_name,
+                              'version': version,
+                              'vulns': result['vulns']
+                          })
+              except Exception as e:
+                  print(f"Could not check {pkg_name}: {e}")
+
+          with open('osv-results.json', 'w') as f:
+              json.dump(vulnerabilities, f, indent=2)
+
+          print(f"packages_checked={len(packages)} vulnerable_packages={len(vulnerabilities)}")
+          EOF
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flutter-security-weekly
+          path: |
+            flutter-outdated.json
+            osv-results.json
+          retention-days: 30
+

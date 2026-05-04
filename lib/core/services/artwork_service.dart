@@ -186,9 +186,54 @@ class ArtworkService {
       );
 
       return ArtworkCommentItem.fromJson(response.data as Map<String, dynamic>);
-    } catch (e) {
-      rethrow;
+    } on DioException catch (e) {
+      throw ApiException(
+        e.response?.statusCode ?? 500,
+        _extractErrorMessage(e, 'Failed to send comment.'),
+      );
     }
+  }
+
+  String _extractErrorMessage(DioException error, String fallback) {
+    final data = error.response?.data;
+
+    if (data is Map<String, dynamic>) {
+      final message = _normalizeMessage(data['message']);
+      if (message != null) return message;
+      final errorMessage = _normalizeMessage(data['error']);
+      if (errorMessage != null) return errorMessage;
+    } else if (data is Map) {
+      final message = _normalizeMessage(data['message']);
+      if (message != null) return message;
+      final errorMessage = _normalizeMessage(data['error']);
+      if (errorMessage != null) return errorMessage;
+    } else {
+      final directMessage = _normalizeMessage(data);
+      if (directMessage != null) return directMessage;
+    }
+
+    return fallback;
+  }
+
+  String? _normalizeMessage(dynamic value) {
+    if (value == null) return null;
+
+    if (value is String) {
+      final trimmed = value.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+
+    if (value is List) {
+      final message = value
+          .map(_normalizeMessage)
+          .whereType<String>()
+          .where((item) => item.isNotEmpty)
+          .join(' ')
+          .trim();
+      return message.isEmpty ? null : message;
+    }
+
+    return value.toString().trim();
   }
 
   Future<List<MentionUserItem>> searchMentionUsers(
@@ -219,14 +264,22 @@ class ArtworkService {
       throw ApiException(400, 'Invalid report reason');
     }
 
-    await _dio.post(
-      '/social/artworks/$artworkId/report',
-      data: {
-        'reason': reason,
-        if (details != null && details.trim().isNotEmpty)
-          'details': details.trim(),
-      },
-    );
+    await ApiClient.syncTokenFromStorage();
+    try {
+      await _dio.post(
+        '/social/artworks/$artworkId/report',
+        data: {
+          'reason': reason,
+          if (details != null && details.trim().isNotEmpty)
+            'details': details.trim(),
+        },
+      );
+    } on DioException catch (e) {
+      throw ApiException(
+        e.response?.statusCode ?? 500,
+        _extractErrorMessage(e, 'Failed to report artwork.'),
+      );
+    }
   }
 
   Future<void> saveArtwork(

@@ -295,6 +295,7 @@ class AuthService {
   }) async {
     final token = await getToken;
     if (token == null) throw ApiException(401, 'Not logged in');
+    ApiClient.setToken(token);
 
     final body = {
       'type': type,
@@ -304,9 +305,22 @@ class AuthService {
       if (imageUrl != null) 'imageUrl': imageUrl,
     };
 
-    final response = await ApiClient.instance.post('/reports', data: body);
-
-    return Map<String, dynamic>.from(response.data ?? {});
+    try {
+      final response = await ApiClient.instance.post('/reports', data: body);
+      return Map<String, dynamic>.from(response.data ?? {});
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      String msg = 'Failed to submit report.';
+      if (data is Map) {
+        final m = data['message'];
+        if (m is String && m.isNotEmpty) {
+          msg = m;
+        } else if (m is List && m.isNotEmpty) {
+          msg = m.first.toString();
+        }
+      }
+      throw ApiException(e.response?.statusCode ?? 500, msg);
+    }
   }
 }
 
