@@ -249,6 +249,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.1.2"
+  emoji_picker_flutter:
+    dependency: "direct main"
+    description:
+      name: emoji_picker_flutter
+      sha256: "984d3e9b9cf3175df9a868ce4a2d9611491e80e5d3b8e2b1e8991a4998972885"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.4.0"
   fake_async:
     dependency: transitive
     description:
@@ -949,6 +957,22 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  socket_io_client:
+    dependency: "direct main"
+    description:
+      name: socket_io_client
+      sha256: ef6c989e5eee8d04baf18482ec3d7699b91bc41e279794a99d8e3bef897b074a
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.1.4"
+  socket_io_common:
+    dependency: transitive
+    description:
+      name: socket_io_common
+      sha256: "162fbaecbf4bf9a9372a62a341b3550b51dcef2f02f3e5830a297fd48203d45b"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.1.1"
   source_gen:
     dependency: transitive
     description:
