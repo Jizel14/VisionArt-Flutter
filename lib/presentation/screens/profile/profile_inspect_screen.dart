@@ -3,19 +3,23 @@ import '../../../core/auth_service.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/models/follow_model.dart';
 import '../../../core/services/follow_service.dart';
+import '../../../core/services/chat_service.dart';
 import '../../widgets/social_share_sheet.dart';
+import '../chat/chat_screen.dart';
 import 'user_gallery_screen.dart';
 
 class ProfileInspectScreen extends StatefulWidget {
   final String userId;
   final UserModel? initialUser;
   final int initialTabIndex;
+  final AuthService? authService;
 
   const ProfileInspectScreen({
     Key? key,
     required this.userId,
     this.initialUser,
     this.initialTabIndex = 0,
+    this.authService,
   }) : super(key: key);
 
   @override
@@ -124,6 +128,35 @@ class _ProfileInspectScreenState extends State<ProfileInspectScreen>
 
   String _profileLink(UserModel user) =>
       'https://visionart.app/users/${user.id}';
+
+  Future<void> _openChat(UserModel user) async {
+    final auth = widget.authService;
+    if (auth == null) return;
+    final token = await auth.getToken ?? '';
+    final chatSvc = ChatService(authToken: token);
+    try {
+      final conv = await chatSvc.createConversation(
+        participantIds: [widget.userId],
+      );
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => ChatScreen(
+            authService: auth,
+            conversationId: conv['id'].toString(),
+            title: user.name,
+            avatarUrl: user.avatarUrl,
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not open chat: $e')));
+    }
+  }
 
   void _showShareProfileSheet(UserModel user) {
     final link = _profileLink(user);
@@ -476,7 +509,33 @@ class _ProfileInspectScreenState extends State<ProfileInspectScreen>
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      if (widget.authService != null) ...[
+                        const SizedBox(width: 8),
+                        SizedBox(
+                          height: 44,
+                          width: 44,
+                          child: OutlinedButton(
+                            onPressed: () => _openChat(user),
+                            style: OutlinedButton.styleFrom(
+                              padding: EdgeInsets.zero,
+                              side: BorderSide(
+                                color: theme.colorScheme.primary.withOpacity(
+                                  0.5,
+                                ),
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(22),
+                              ),
+                            ),
+                            child: Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              size: 20,
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                      const SizedBox(width: 8),
                       SizedBox(
                         height: 44,
                         width: 44,
@@ -700,6 +759,7 @@ class _ProfileInspectScreenState extends State<ProfileInspectScreen>
           MaterialPageRoute(
             builder: (context) => ProfileInspectScreen(
               userId: user.id,
+              authService: widget.authService,
               initialUser: UserModel(
                 id: user.id,
                 name: user.name,

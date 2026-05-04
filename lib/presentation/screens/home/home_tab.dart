@@ -24,6 +24,9 @@ import 'notifications_screen.dart';
 import '../profile/artwork_detail_screen.dart';
 import 'saved_collections_screen.dart';
 import '../profile/profile_inspect_screen.dart';
+import '../chat/conversations_screen.dart';
+import '../../../core/auth_service.dart';
+
 class HomeTab extends StatefulWidget {
   const HomeTab({
     super.key,
@@ -31,12 +34,14 @@ class HomeTab extends StatefulWidget {
     this.isLoading = false,
     required this.onToggleTheme,
     required this.currentUser,
+    required this.authService,
   });
 
   final String userName;
   final bool isLoading;
   final VoidCallback onToggleTheme;
   final UserModel? currentUser;
+  final AuthService authService;
 
   @override
   State<HomeTab> createState() => _HomeTabState();
@@ -523,9 +528,9 @@ class _HomeTabState extends State<HomeTab> {
                     Text(
                       'Comments',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: context.textPrimaryColor,
-                        fontWeight: FontWeight.w700,
-                      ),
+                            color: context.textPrimaryColor,
+                            fontWeight: FontWeight.w700,
+                          ),
                     ),
                     const SizedBox(height: 12),
                     ConstrainedBox(
@@ -536,186 +541,197 @@ class _HomeTabState extends State<HomeTab> {
                       child: isLoadingComments
                           ? const Center(child: CircularProgressIndicator())
                           : comments.isEmpty
-                          ? Center(
-                              child: Text(
-                                'No comments yet',
-                                style: TextStyle(
-                                  color: context.textSecondaryColor,
-                                ),
-                              ),
-                            )
-                          : ListView.separated(
-                              itemCount: comments.length,
-                              separatorBuilder: (_, __) =>
-                                  const Divider(height: 16),
-                              itemBuilder: (_, index) {
-                                final comment = comments[index];
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
+                              ? Center(
+                                  child: Text(
+                                    'No comments yet',
+                                    style: TextStyle(
+                                      color: context.textSecondaryColor,
+                                    ),
+                                  ),
+                                )
+                              : ListView.separated(
+                                  itemCount: comments.length,
+                                  separatorBuilder: (_, __) =>
+                                      const Divider(height: 16),
+                                  itemBuilder: (_, index) {
+                                    final comment = comments[index];
+                                    return Column(
                                       crossAxisAlignment:
                                           CrossAxisAlignment.start,
                                       children: [
-                                        CircleAvatar(
-                                          radius: 14,
-                                          backgroundImage:
-                                              comment.userAvatarUrl != null
-                                              ? NetworkImage(
-                                                  comment.userAvatarUrl!,
-                                                )
-                                              : null,
-                                          child: comment.userAvatarUrl == null
-                                              ? Text(
-                                                  comment.userName.isNotEmpty
-                                                      ? comment.userName[0]
-                                                            .toUpperCase()
-                                                      : '?',
-                                                )
-                                              : null,
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Expanded(
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                              Text(
-                                                comment.userName,
-                                                style: TextStyle(
-                                                  color: context
-                                                      .textPrimaryColor,
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 2),
-                                              Text(
-                                                comment.content,
-                                                style: TextStyle(
-                                                  color: context
-                                                      .textSecondaryColor,
-                                                ),
-                                              ),
-                                              const SizedBox(height: 4),
-                                              GestureDetector(
-                                                onTap: () {
-                                                  setSheetState(() {
-                                                    replyingTo = comment;
-                                                    commentCtrl.text =
-                                                        '@${comment.userName} ';
-                                                    commentCtrl.selection =
-                                                        TextSelection.collapsed(
-                                                          offset: commentCtrl
-                                                              .text
-                                                              .length,
-                                                        );
-                                                    selectedMentionIdsByName[comment
-                                                            .userName
-                                                            .toLowerCase()] =
-                                                        comment.userId;
-                                                  });
-                                                },
-                                                child: Text(
-                                                  'Reply',
-                                                  style: TextStyle(
-                                                    color: Theme.of(
-                                                      context,
-                                                    ).colorScheme.primary,
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    if (comment.replies.isNotEmpty) ...[
-                                      const SizedBox(height: 8),
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          left: 24,
-                                        ),
-                                        child: Column(
-                                          children: comment.replies.map((reply) {
-                                            return Padding(
-                                              padding: const EdgeInsets.only(
-                                                bottom: 8,
-                                              ),
-                                              child: Row(
+                                        Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            CircleAvatar(
+                                              radius: 14,
+                                              backgroundImage:
+                                                  comment.userAvatarUrl != null
+                                                      ? NetworkImage(
+                                                          comment
+                                                              .userAvatarUrl!,
+                                                        )
+                                                      : null,
+                                              child: comment.userAvatarUrl ==
+                                                      null
+                                                  ? Text(
+                                                      comment.userName
+                                                              .isNotEmpty
+                                                          ? comment.userName[0]
+                                                              .toUpperCase()
+                                                          : '?',
+                                                    )
+                                                  : null,
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Column(
                                                 crossAxisAlignment:
                                                     CrossAxisAlignment.start,
                                                 children: [
-                                                  CircleAvatar(
-                                                    radius: 12,
-                                                    backgroundImage:
-                                                        reply.userAvatarUrl !=
-                                                            null
-                                                        ? NetworkImage(
-                                                            reply.userAvatarUrl!,
-                                                          )
-                                                        : null,
-                                                    child:
-                                                        reply.userAvatarUrl ==
-                                                            null
-                                                        ? Text(
-                                                            reply
-                                                                    .userName
-                                                                    .isNotEmpty
-                                                                ? reply
-                                                                      .userName[0]
-                                                                      .toUpperCase()
-                                                                : '?',
-                                                            style:
-                                                                const TextStyle(
-                                                                  fontSize: 11,
-                                                                ),
-                                                          )
-                                                        : null,
+                                                  Text(
+                                                    comment.userName,
+                                                    style: TextStyle(
+                                                      color: context
+                                                          .textPrimaryColor,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
                                                   ),
-                                                  const SizedBox(width: 8),
-                                                  Expanded(
-                                                    child: Column(
-                                                      crossAxisAlignment:
-                                                          CrossAxisAlignment
-                                                              .start,
-                                                      children: [
-                                                        Text(
-                                                          reply.userName,
-                                                          style: TextStyle(
-                                                            color: context
-                                                                .textPrimaryColor,
-                                                            fontSize: 12,
-                                                            fontWeight:
-                                                                FontWeight.w600,
-                                                          ),
-                                                        ),
-                                                        const SizedBox(
-                                                          height: 2,
-                                                        ),
-                                                        Text(
-                                                          reply.content,
-                                                          style: TextStyle(
-                                                            color: context
-                                                                .textSecondaryColor,
-                                                            fontSize: 12,
-                                                          ),
-                                                        ),
-                                                      ],
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    comment.content,
+                                                    style: TextStyle(
+                                                      color: context
+                                                          .textSecondaryColor,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  GestureDetector(
+                                                    onTap: () {
+                                                      setSheetState(() {
+                                                        replyingTo = comment;
+                                                        commentCtrl.text =
+                                                            '@${comment.userName} ';
+                                                        commentCtrl.selection =
+                                                            TextSelection
+                                                                .collapsed(
+                                                          offset: commentCtrl
+                                                              .text.length,
+                                                        );
+                                                        selectedMentionIdsByName[
+                                                                comment.userName
+                                                                    .toLowerCase()] =
+                                                            comment.userId;
+                                                      });
+                                                    },
+                                                    child: Text(
+                                                      'Reply',
+                                                      style: TextStyle(
+                                                        color: Theme.of(
+                                                          context,
+                                                        ).colorScheme.primary,
+                                                        fontSize: 12,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
                                                     ),
                                                   ),
                                                 ],
                                               ),
-                                            );
-                                          }).toList(),
+                                            ),
+                                          ],
                                         ),
-                                      ),
-                                    ],
-                                  ],
-                                );
-                              },
-                            ),
+                                        if (comment.replies.isNotEmpty) ...[
+                                          const SizedBox(height: 8),
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              left: 24,
+                                            ),
+                                            child: Column(
+                                              children:
+                                                  comment.replies.map((reply) {
+                                                return Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                    bottom: 8,
+                                                  ),
+                                                  child: Row(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment
+                                                            .start,
+                                                    children: [
+                                                      CircleAvatar(
+                                                        radius: 12,
+                                                        backgroundImage:
+                                                            reply.userAvatarUrl !=
+                                                                    null
+                                                                ? NetworkImage(
+                                                                    reply
+                                                                        .userAvatarUrl!,
+                                                                  )
+                                                                : null,
+                                                        child:
+                                                            reply.userAvatarUrl ==
+                                                                    null
+                                                                ? Text(
+                                                                    reply.userName
+                                                                            .isNotEmpty
+                                                                        ? reply
+                                                                            .userName[0]
+                                                                            .toUpperCase()
+                                                                        : '?',
+                                                                    style:
+                                                                        const TextStyle(
+                                                                      fontSize:
+                                                                          11,
+                                                                    ),
+                                                                  )
+                                                                : null,
+                                                      ),
+                                                      const SizedBox(width: 8),
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .start,
+                                                          children: [
+                                                            Text(
+                                                              reply.userName,
+                                                              style: TextStyle(
+                                                                color: context
+                                                                    .textPrimaryColor,
+                                                                fontSize: 12,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w600,
+                                                              ),
+                                                            ),
+                                                            const SizedBox(
+                                                              height: 2,
+                                                            ),
+                                                            Text(
+                                                              reply.content,
+                                                              style: TextStyle(
+                                                                color: context
+                                                                    .textSecondaryColor,
+                                                                fontSize: 12,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                );
+                                              }).toList(),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    );
+                                  },
+                                ),
                     ),
                     const SizedBox(height: 12),
                     if (replyingTo != null)
@@ -766,7 +782,8 @@ class _HomeTabState extends State<HomeTab> {
                       )
                     else if (mentionSuggestions.isNotEmpty)
                       Container(
-                        constraints: BoxConstraints(maxHeight: mentionMaxHeight),
+                        constraints:
+                            BoxConstraints(maxHeight: mentionMaxHeight),
                         margin: const EdgeInsets.only(bottom: 8),
                         decoration: BoxDecoration(
                           color: context.surfaceColor.withOpacity(0.45),
@@ -821,14 +838,16 @@ class _HomeTabState extends State<HomeTab> {
                           vertical: 10,
                         ),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.error.withOpacity(
-                            0.12,
-                          ),
+                          color:
+                              Theme.of(context).colorScheme.error.withOpacity(
+                                    0.12,
+                                  ),
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: Theme.of(context).colorScheme.error.withOpacity(
-                              0.35,
-                            ),
+                            color:
+                                Theme.of(context).colorScheme.error.withOpacity(
+                                      0.35,
+                                    ),
                           ),
                         ),
                         child: Row(
@@ -892,7 +911,8 @@ class _HomeTabState extends State<HomeTab> {
                                   final content = commentCtrl.text.trim();
                                   if (content.isEmpty) return;
 
-                                  final mentionUserIds = resolveMentionedUserIds(
+                                  final mentionUserIds =
+                                      resolveMentionedUserIds(
                                     content,
                                   );
 
@@ -900,22 +920,22 @@ class _HomeTabState extends State<HomeTab> {
                                   try {
                                     final created = await _artworkService
                                         .createArtworkComment(
-                                          artwork.id,
-                                          content,
-                                          parentCommentId: replyingTo?.id,
-                                          mentionedUserIds: mentionUserIds,
-                                        );
+                                      artwork.id,
+                                      content,
+                                      parentCommentId: replyingTo?.id,
+                                      mentionedUserIds: mentionUserIds,
+                                    );
 
                                     if (!mounted ||
                                         !isSheetOpen ||
-                                        !sheetContext.mounted)
-                                      return;
+                                        !sheetContext.mounted) return;
                                     setSheetState(() {
                                       commentErrorMessage = null;
                                       if (created.parentCommentId != null) {
                                         final parentIndex = comments.indexWhere(
                                           (item) =>
-                                              item.id == created.parentCommentId,
+                                              item.id ==
+                                              created.parentCommentId,
                                         );
                                         if (parentIndex >= 0) {
                                           comments[parentIndex] = appendReply(
@@ -937,7 +957,8 @@ class _HomeTabState extends State<HomeTab> {
 
                                     setState(() {
                                       final current = _artworks[artworkIndex];
-                                      _artworks[artworkIndex] = current.copyWith(
+                                      _artworks[artworkIndex] =
+                                          current.copyWith(
                                         commentsCount:
                                             current.commentsCount + 1,
                                       );
@@ -945,8 +966,7 @@ class _HomeTabState extends State<HomeTab> {
                                   } on ApiException catch (e) {
                                     if (!mounted ||
                                         !isSheetOpen ||
-                                        !sheetContext.mounted)
-                                      return;
+                                        !sheetContext.mounted) return;
                                     setSheetState(() {
                                       isSubmitting = false;
                                       commentErrorMessage = e.message;
@@ -966,8 +986,7 @@ class _HomeTabState extends State<HomeTab> {
                                   } catch (e) {
                                     if (!mounted ||
                                         !isSheetOpen ||
-                                        !sheetContext.mounted)
-                                      return;
+                                        !sheetContext.mounted) return;
                                     setSheetState(() {
                                       isSubmitting = false;
                                       commentErrorMessage =
@@ -1052,9 +1071,9 @@ class _HomeTabState extends State<HomeTab> {
                   Text(
                     'Report Artwork',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: context.textPrimaryColor,
-                      fontWeight: FontWeight.w700,
-                    ),
+                          color: context.textPrimaryColor,
+                          fontWeight: FontWeight.w700,
+                        ),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
@@ -1113,9 +1132,10 @@ class _HomeTabState extends State<HomeTab> {
                             ),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: Theme.of(context).colorScheme.error.withOpacity(
-                                0.35,
-                              ),
+                          color:
+                              Theme.of(context).colorScheme.error.withOpacity(
+                                    0.35,
+                                  ),
                         ),
                       ),
                       child: Text(
@@ -1148,8 +1168,7 @@ class _HomeTabState extends State<HomeTab> {
 
                                 if (!mounted ||
                                     !isSheetOpen ||
-                                    !sheetContext.mounted)
-                                  return;
+                                    !sheetContext.mounted) return;
                                 Navigator.of(context).pop();
                                 ScaffoldMessenger.of(this.context).showSnackBar(
                                   const SnackBar(
@@ -1161,8 +1180,7 @@ class _HomeTabState extends State<HomeTab> {
                               } catch (e) {
                                 if (!mounted ||
                                     !isSheetOpen ||
-                                    !sheetContext.mounted)
-                                  return;
+                                    !sheetContext.mounted) return;
                                 setSheetState(() {
                                   isSubmitting = false;
                                   reportErrorMessage = userFacingApiError(e);
@@ -1199,198 +1217,242 @@ class _HomeTabState extends State<HomeTab> {
         children: [
           Expanded(
             child: SafeArea(
-              top: false,
+              top: true,
               child: widget.isLoading
                   ? _buildShimmer(context)
                   : CustomScrollView(
-                controller: _scrollController,
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              'Welcome, ${widget.userName}',
-                              style: Theme.of(context).textTheme.headlineMedium
-                                  ?.copyWith(
-                                    color: textPrimary,
-                                    fontWeight: FontWeight.w700,
+                      controller: _scrollController,
+                      slivers: [
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(24, 12, 24, 16),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    'Welcome, ${widget.userName}',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .headlineMedium
+                                        ?.copyWith(
+                                          color: textPrimary,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                   ),
+                                ),
+                                const SizedBox(width: 8),
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: IconButton(
+                                    onPressed: () => Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ConversationsScreen(
+                                          authService: widget.authService,
+                                        ),
+                                      ),
+                                    ),
+                                    icon: Icon(
+                                      Icons.chat_bubble_outline_rounded,
+                                      color: textPrimary,
+                                    ),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: IconButton(
+                                    onPressed: _openSavedCollections,
+                                    icon: Icon(
+                                      Icons.bookmark_rounded,
+                                      color: textPrimary,
+                                    ),
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: Stack(
+                                    clipBehavior: Clip.none,
+                                    children: [
+                                      IconButton(
+                                        onPressed: _openNotifications,
+                                        icon: Icon(
+                                          Icons.notifications_rounded,
+                                          color: textPrimary,
+                                        ),
+                                      ),
+                                      if (_unreadNotificationsCount > 0)
+                                        Positioned(
+                                          right: 6,
+                                          top: 8,
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 5,
+                                              vertical: 1,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: Theme.of(context)
+                                                  .colorScheme
+                                                  .error,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                            ),
+                                            child: Text(
+                                              _unreadNotificationsCount > 99
+                                                  ? '99+'
+                                                  : '$_unreadNotificationsCount',
+                                              style: TextStyle(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .onError,
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 6),
+                                  child: IconButton(
+                                    onPressed: widget.onToggleTheme,
+                                    icon: Icon(
+                                      context.isDark
+                                          ? Icons.light_mode_rounded
+                                          : Icons.dark_mode_rounded,
+                                      color: textPrimary,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                          IconButton(
-                            onPressed: _openSavedCollections,
-                            icon: Icon(
-                              Icons.bookmark_rounded,
-                              color: textPrimary,
+                        ),
+                        SliverToBoxAdapter(
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _StoriesStrip(
+                              currentUser: widget.currentUser,
+                              stories: _stories,
+                              isLoading: _isLoadingStories,
+                              onCreateStory: _showCreateStorySheet,
+                              onOpenUserStories: _openStoryViewer,
                             ),
                           ),
-                          Stack(
-                            clipBehavior: Clip.none,
-                            children: [
-                              IconButton(
-                                onPressed: _openNotifications,
-                                icon: Icon(
-                                  Icons.notifications_rounded,
-                                  color: textPrimary,
+                        ),
+                        if (_artworks.isEmpty && !_isLoadingFeed)
+                          SliverToBoxAdapter(
+                            child: Padding(
+                              padding: const EdgeInsets.all(32),
+                              child: Column(
+                                children: [
+                                  Icon(
+                                    Icons.image_not_supported,
+                                    size: 64,
+                                    color: textSecondary,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'No artworks in your feed yet',
+                                    style: TextStyle(color: textSecondary),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        else
+                          SliverPadding(
+                            padding: const EdgeInsets.symmetric(horizontal: 24),
+                            sliver: AnimationLimiter(
+                              child: SliverList(
+                                delegate: SliverChildBuilderDelegate(
+                                  (context, index) {
+                                    if (index >= _artworks.length) {
+                                      return _isLoadingFeed
+                                          ? const Padding(
+                                              padding: EdgeInsets.all(24),
+                                              child: Center(
+                                                child:
+                                                    CircularProgressIndicator(),
+                                              ),
+                                            )
+                                          : const SizedBox();
+                                    }
+
+                                    final artwork = _artworks[index];
+                                    final isOwnPost =
+                                        widget.currentUser != null &&
+                                            widget.currentUser!.id ==
+                                                artwork.user.id;
+
+                                    return AnimationConfiguration.staggeredList(
+                                      position: index,
+                                      duration:
+                                          const Duration(milliseconds: 400),
+                                      child: SlideAnimation(
+                                        verticalOffset: 30,
+                                        child: FadeInAnimation(
+                                          child: Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 20,
+                                            ),
+                                            child: _FeedCard(
+                                              artwork: artwork,
+                                              isOwnPost: isOwnPost,
+                                              textPrimary: textPrimary,
+                                              textSecondary: textSecondary,
+                                              onTapAuthor: () {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        ProfileInspectScreen(
+                                                      userId: artwork.user.id,
+                                                      initialUser: artwork.user,
+                                                      authService:
+                                                          widget.authService,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                              onTapCard: () {
+                                                Navigator.push(
+                                                  context,
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        ArtworkDetailScreen(
+                                                      artwork: artwork,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                              onTapFollow: () =>
+                                                  _toggleFollow(index),
+                                              onTapLike: () =>
+                                                  _toggleLike(index),
+                                              onTapSave: () =>
+                                                  _toggleSave(index),
+                                              onTapComments: () =>
+                                                  _openComments(index),
+                                              onTapReport: () =>
+                                                  _openReport(index),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  childCount: _artworks.length +
+                                      (_isLoadingFeed ? 1 : 0),
                                 ),
                               ),
-                              if (_unreadNotificationsCount > 0)
-                                Positioned(
-                                  right: 6,
-                                  top: 8,
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 5,
-                                      vertical: 1,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: Colors.redAccent,
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    child: Text(
-                                      _unreadNotificationsCount > 99
-                                          ? '99+'
-                                          : '$_unreadNotificationsCount',
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          IconButton(
-                            onPressed: widget.onToggleTheme,
-                            icon: Icon(
-                              context.isDark
-                                  ? Icons.light_mode_rounded
-                                  : Icons.dark_mode_rounded,
-                              color: textPrimary,
                             ),
                           ),
-                        ],
-                      ),
+                        const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                      ],
                     ),
-                  ),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _StoriesStrip(
-                        currentUser: widget.currentUser,
-                        stories: _stories,
-                        isLoading: _isLoadingStories,
-                        onCreateStory: _showCreateStorySheet,
-                        onOpenUserStories: _openStoryViewer,
-                      ),
-                    ),
-                  ),
-                  if (_artworks.isEmpty && !_isLoadingFeed)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.all(32),
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.image_not_supported,
-                              size: 64,
-                              color: textSecondary,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No artworks in your feed yet',
-                              style: TextStyle(color: textSecondary),
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  else
-                    SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      sliver: AnimationLimiter(
-                        child: SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              if (index >= _artworks.length) {
-                                return _isLoadingFeed
-                                    ? const Padding(
-                                        padding: EdgeInsets.all(24),
-                                        child: Center(
-                                          child: CircularProgressIndicator(),
-                                        ),
-                                      )
-                                    : const SizedBox();
-                              }
-
-                              final artwork = _artworks[index];
-                              final isOwnPost =
-                                  widget.currentUser != null &&
-                                  widget.currentUser!.id == artwork.user.id;
-
-                              return AnimationConfiguration.staggeredList(
-                                position: index,
-                                duration: const Duration(milliseconds: 400),
-                                child: SlideAnimation(
-                                  verticalOffset: 30,
-                                  child: FadeInAnimation(
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 20,
-                                      ),
-                                      child: _FeedCard(
-                                        artwork: artwork,
-                                        isOwnPost: isOwnPost,
-                                        textPrimary: textPrimary,
-                                        textSecondary: textSecondary,
-                                        onTapAuthor: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) =>
-                                                  ProfileInspectScreen(
-                                                    userId: artwork.user.id,
-                                                    initialUser: artwork.user,
-                                                  ),
-                                            ),
-                                          );
-                                        },
-                                        onTapCard: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) =>
-                                                  ArtworkDetailScreen(
-                                                    artwork: artwork,
-                                                  ),
-                                            ),
-                                          );
-                                        },
-                                        onTapFollow: () => _toggleFollow(index),
-                                        onTapLike: () => _toggleLike(index),
-                                        onTapSave: () => _toggleSave(index),
-                                        onTapComments: () =>
-                                            _openComments(index),
-                                        onTapReport: () => _openReport(index),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              );
-                            },
-                            childCount:
-                                _artworks.length + (_isLoadingFeed ? 1 : 0),
-                          ),
-                        ),
-                      ),
-                    ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 100)),
-                ],
-              ),
             ),
           ),
         ],
@@ -1664,15 +1726,16 @@ class _StoriesStrip extends StatelessWidget {
         : const <StoryModel>[];
 
     final otherEntries =
-        userStories.entries.where((e) => e.key != meId).toList()..sort((a, b) {
-          final aLatest = a.value
-              .map((s) => s.createdAt)
-              .reduce((x, y) => x.isAfter(y) ? x : y);
-          final bLatest = b.value
-              .map((s) => s.createdAt)
-              .reduce((x, y) => x.isAfter(y) ? x : y);
-          return bLatest.compareTo(aLatest);
-        });
+        userStories.entries.where((e) => e.key != meId).toList()
+          ..sort((a, b) {
+            final aLatest = a.value
+                .map((s) => s.createdAt)
+                .reduce((x, y) => x.isAfter(y) ? x : y);
+            final bLatest = b.value
+                .map((s) => s.createdAt)
+                .reduce((x, y) => x.isAfter(y) ? x : y);
+            return bLatest.compareTo(aLatest);
+          });
 
     final itemsCount = 1 + otherEntries.length;
 
@@ -1898,12 +1961,10 @@ class _CreateStoryBottomSheetState extends State<_CreateStoryBottomSheet> {
     } catch (e) {
       if (!mounted) return;
 
-      final message = e is PlatformException
-          ? (e.message ?? e.code)
-          : e.toString();
-      final safeMessage = message.length > 140
-          ? '${message.substring(0, 140)}…'
-          : message;
+      final message =
+          e is PlatformException ? (e.message ?? e.code) : e.toString();
+      final safeMessage =
+          message.length > 140 ? '${message.substring(0, 140)}…' : message;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Unable to pick image: $safeMessage')),
@@ -1941,12 +2002,10 @@ class _CreateStoryBottomSheetState extends State<_CreateStoryBottomSheet> {
       if (!mounted) return;
       setState(() => _isPosting = false);
 
-      final message = e is DioException
-          ? (e.message ?? 'Request failed')
-          : e.toString();
-      final safeMessage = message.length > 140
-          ? '${message.substring(0, 140)}…'
-          : message;
+      final message =
+          e is DioException ? (e.message ?? 'Request failed') : e.toString();
+      final safeMessage =
+          message.length > 140 ? '${message.substring(0, 140)}…' : message;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to post story: $safeMessage')),
@@ -1971,9 +2030,9 @@ class _CreateStoryBottomSheetState extends State<_CreateStoryBottomSheet> {
             Text(
               'New story',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: context.textPrimaryColor,
-                fontWeight: FontWeight.w700,
-              ),
+                    color: context.textPrimaryColor,
+                    fontWeight: FontWeight.w700,
+                  ),
             ),
             const SizedBox(height: 12),
             if (_selectedBytes != null) ...[
@@ -2029,9 +2088,8 @@ class _CreateStoryBottomSheetState extends State<_CreateStoryBottomSheet> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: _isPosting
-                        ? null
-                        : () => Navigator.of(context).pop(),
+                    onPressed:
+                        _isPosting ? null : () => Navigator.of(context).pop(),
                     child: const Text('Cancel'),
                   ),
                 ),

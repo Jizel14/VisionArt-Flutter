@@ -54,11 +54,12 @@ dependencies:
   url_launcher: ^6.3.1
   webview_flutter: ^4.10.0
   intl: ^0.19.0
+  socket_io_client: ^3.1.4
+  emoji_picker_flutter: ^4.4.0
   signature: ^5.5.0
   image_gallery_saver_plus: ^4.0.1
   image_picker: ^1.1.2
   audioplayers: ^6.1.0
-  socket_io_client: ^2.0.3+1
 
 dev_dependencies:
   build_runner: ^2.4.6

@@ -1,7 +1,12 @@
 import 'dart:ui';
-import 'package:flutter/material.dart';
+
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../../core/models/artwork_model.dart';
+import '../../../core/services/marketplace_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
 import '../../widgets/social_share_sheet.dart';
@@ -10,22 +15,27 @@ import 'profile_inspect_screen.dart';
 class ArtworkDetailScreen extends StatefulWidget {
   final ArtworkModel artwork;
 
-  const ArtworkDetailScreen({Key? key, required this.artwork})
-    : super(key: key);
+  const ArtworkDetailScreen({super.key, required this.artwork});
 
   @override
   State<ArtworkDetailScreen> createState() => _ArtworkDetailScreenState();
 }
 
 class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
+  late ArtworkModel _artwork;
+  final MarketplaceService _marketplaceService = MarketplaceService();
   late bool _isLiked;
   late int _likesCount;
+  bool _isMinting = false;
+
+  ArtworkModel get artwork => _artwork;
 
   @override
   void initState() {
     super.initState();
-    _isLiked = widget.artwork.isLikedByMe;
-    _likesCount = widget.artwork.likesCount;
+    _artwork = widget.artwork;
+    _isLiked = artwork.isLikedByMe;
+    _likesCount = artwork.likesCount;
   }
 
   void _toggleLike() {
@@ -36,11 +46,11 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
   }
 
   void _onShare() {
-    final link = 'https://visionart.app/artworks/${widget.artwork.id}';
-    final title = widget.artwork.title?.isNotEmpty == true
-        ? widget.artwork.title!
+    final link = 'https://visionart.app/artworks/${artwork.id}';
+    final title = artwork.title?.isNotEmpty == true
+        ? artwork.title!
         : 'Untitled artwork';
-    final caption = '$title by @${widget.artwork.user.name}\n$link';
+    final caption = '$title by @${artwork.user.name}\n$link';
 
     showSocialShareSheet(
       context: context,
@@ -50,18 +60,119 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
     );
   }
 
+  Map<String, dynamic>? get _nftData {
+    final metadata = artwork.metadata;
+    if (metadata == null) return null;
+
+    final nft = metadata['nft'];
+    if (nft is Map<String, dynamic>) {
+      return nft;
+    }
+
+    return null;
+  }
+
+  Future<void> _mintArtwork() async {
+    if (_isMinting) return;
+
+    final addressController = TextEditingController();
+    final recipientAddress = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Mint as NFT'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Enter your MetaMask wallet address to receive the NFT:',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: addressController,
+              decoration: const InputDecoration(
+                hintText: '0x...',
+                labelText: 'Recipient wallet address',
+                border: OutlineInputBorder(),
+              ),
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, addressController.text.trim()),
+            child: const Text('Mint'),
+          ),
+        ],
+      ),
+    );
+
+    if (recipientAddress == null || recipientAddress.isEmpty) return;
+
+    if (!RegExp(r'^0x[a-fA-F0-9]{40}$').hasMatch(recipientAddress)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Invalid wallet address')));
+      return;
+    }
+
+    setState(() => _isMinting = true);
+    try {
+      final response = await _marketplaceService.mintArtworkNft(
+        artworkId: artwork.id,
+        recipientAddress: recipientAddress,
+      );
+
+      final updatedArtworkJson = response['artwork'];
+      if (updatedArtworkJson is Map<String, dynamic>) {
+        _artwork = ArtworkModel.fromJson(updatedArtworkJson);
+      }
+
+      if (!mounted) return;
+      setState(() {});
+
+      final nft = response['nft'];
+      final tokenId = nft is Map ? '${nft['tokenId'] ?? ''}' : '';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            tokenId.isNotEmpty
+                ? 'NFT minted successfully. Token #$tokenId is now on chain.'
+                : 'NFT minted successfully on chain.',
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Mint failed: $e')));
+    } finally {
+      if (mounted) {
+        setState(() => _isMinting = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textPrimary = context.textPrimaryColor;
     final textSecondary = context.textSecondaryColor;
+    final nftData = _nftData;
+    final canMint = artwork.isPublic && nftData == null;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-          // Image Header
           SliverAppBar(
             expandedHeight: MediaQuery.of(context).size.width,
             pinned: true,
@@ -94,9 +205,9 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
             ],
             flexibleSpace: FlexibleSpaceBar(
               background: Hero(
-                tag: 'artwork_image_${widget.artwork.id}',
+                tag: 'artwork_image_${artwork.id}',
                 child: CachedNetworkImage(
-                  imageUrl: widget.artwork.imageUrl,
+                  imageUrl: artwork.imageUrl,
                   fit: BoxFit.cover,
                   errorWidget: (context, url, error) {
                     return Container(
@@ -112,18 +223,15 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
               ),
             ),
           ),
-
-          // Body Content
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.all(24.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Title
                   Text(
-                    widget.artwork.title?.isNotEmpty == true
-                        ? widget.artwork.title!
+                    artwork.title?.isNotEmpty == true
+                        ? artwork.title!
                         : 'Untitled',
                     style: theme.textTheme.headlineSmall?.copyWith(
                       fontWeight: FontWeight.bold,
@@ -131,16 +239,14 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-
-                  // Artist Profile
                   GestureDetector(
                     onTap: () {
                       Navigator.push(
                         context,
                         MaterialPageRoute(
                           builder: (_) => ProfileInspectScreen(
-                            userId: widget.artwork.user.id,
-                            initialUser: widget.artwork.user,
+                            userId: artwork.user.id,
+                            initialUser: artwork.user,
                           ),
                         ),
                       );
@@ -158,11 +264,10 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                             ),
                           ),
                           child: CircleAvatar(
-                            backgroundImage:
-                                widget.artwork.user.avatarUrl != null
-                                ? NetworkImage(widget.artwork.user.avatarUrl!)
+                            backgroundImage: artwork.user.avatarUrl != null
+                                ? NetworkImage(artwork.user.avatarUrl!)
                                 : null,
-                            child: widget.artwork.user.avatarUrl == null
+                            child: artwork.user.avatarUrl == null
                                 ? const Icon(Icons.person_rounded)
                                 : null,
                           ),
@@ -176,7 +281,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                 children: [
                                   Flexible(
                                     child: Text(
-                                      widget.artwork.user.name,
+                                      artwork.user.name,
                                       style: theme.textTheme.titleMedium
                                           ?.copyWith(
                                             fontWeight: FontWeight.w700,
@@ -186,7 +291,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
-                                  if (widget.artwork.user.isVerified) ...[
+                                  if (artwork.user.isVerified) ...[
                                     const SizedBox(width: 4),
                                     const Icon(
                                       Icons.verified,
@@ -197,7 +302,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                 ],
                               ),
                               Text(
-                                '@${widget.artwork.user.email.split('@')[0]}',
+                                '@${artwork.user.email.split('@')[0]}',
                                 style: theme.textTheme.bodyMedium?.copyWith(
                                   color: textSecondary,
                                 ),
@@ -209,12 +314,10 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
-
-                  // Prompt / Description
-                  if (widget.artwork.description != null &&
-                      widget.artwork.description!.isNotEmpty) ...[
+                  if (artwork.description != null &&
+                      artwork.description!.isNotEmpty) ...[
                     Text(
-                      widget.artwork.description!,
+                      artwork.description!,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: textSecondary,
                         height: 1.5,
@@ -222,27 +325,19 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                     ),
                     const SizedBox(height: 24),
                   ],
-
-                  // Stats Row
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
                       _buildStatItem('Likes', _likesCount, context),
                       _buildStatItem(
                         'Comments',
-                        widget.artwork.commentsCount,
+                        artwork.commentsCount,
                         context,
                       ),
-                      _buildStatItem(
-                        'Remixes',
-                        widget.artwork.remixCount,
-                        context,
-                      ),
+                      _buildStatItem('Remixes', artwork.remixCount, context),
                     ],
                   ),
                   const SizedBox(height: 24),
-
-                  // Action Buttons
                   Row(
                     children: [
                       Expanded(
@@ -276,9 +371,143 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                     ],
                   ),
                   const SizedBox(height: 32),
-
-                  // Remix Info
-                  if (widget.artwork.remixedFrom != null) ...[
+                  _buildGlassCard(
+                    context: context,
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.token_rounded,
+                                color: AppColors.nftAccent,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                nftData == null
+                                    ? 'Mint as NFT'
+                                    : 'On-chain NFT',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: context.textPrimaryColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          if (nftData == null) ...[
+                            Text(
+                              artwork.isPublic
+                                  ? 'Mint this public artwork to Polygon Amoy and persist the token metadata on-chain.'
+                                  : 'Make this artwork public before minting it as an NFT.',
+                              style: TextStyle(
+                                color: context.textSecondaryColor,
+                                height: 1.4,
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            SizedBox(
+                              width: double.infinity,
+                              child: FilledButton.icon(
+                                onPressed: canMint && !_isMinting
+                                    ? _mintArtwork
+                                    : null,
+                                icon: _isMinting
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.black87,
+                                        ),
+                                      )
+                                    : const Icon(Icons.auto_awesome_rounded),
+                                label: Text(
+                                  _isMinting ? 'Minting...' : 'Mint NFT',
+                                ),
+                              ),
+                            ),
+                          ] else ...[
+                            _buildMetadataRow(
+                              'Contract',
+                              _shortenAddress(
+                                '${nftData['contractAddress'] ?? '-'}',
+                              ),
+                              context,
+                            ),
+                            _buildMetadataRow(
+                              'Token ID',
+                              '${nftData['tokenId'] ?? '-'}',
+                              context,
+                            ),
+                            _buildMetadataRow(
+                              'Tx hash',
+                              _shortenAddress(
+                                '${nftData['transactionHash'] ?? '-'}',
+                              ),
+                              context,
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Minted at ${_formatDateTime('${nftData['mintedAt'] ?? ''}')}',
+                              style: TextStyle(
+                                color: context.textSecondaryColor,
+                                fontSize: 12,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              children: [
+                                TextButton.icon(
+                                  onPressed: () async {
+                                    final txHash =
+                                        '${nftData['transactionHash'] ?? ''}';
+                                    if (txHash.isEmpty) return;
+                                    await Clipboard.setData(
+                                      ClipboardData(text: txHash),
+                                    );
+                                    if (!context.mounted) return;
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Transaction hash copied',
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.copy_rounded),
+                                  label: const Text('Copy tx hash'),
+                                ),
+                                TextButton.icon(
+                                  onPressed: () async {
+                                    final txHash =
+                                        '${nftData['transactionHash'] ?? ''}';
+                                    if (txHash.isEmpty) return;
+                                    final uri = Uri.parse(
+                                      'https://amoy.polygonscan.com/tx/$txHash',
+                                    );
+                                    if (await canLaunchUrl(uri)) {
+                                      await launchUrl(
+                                        uri,
+                                        mode: LaunchMode.externalApplication,
+                                      );
+                                    }
+                                  },
+                                  icon: const Icon(Icons.open_in_new_rounded),
+                                  label: const Text('View on explorer'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (artwork.remixedFrom != null) ...[
                     _buildGlassCard(
                       context: context,
                       child: Padding(
@@ -304,7 +533,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                   ),
                                   const SizedBox(height: 2),
                                   Text(
-                                    widget.artwork.remixedFrom!.user.name,
+                                    artwork.remixedFrom!.user.name,
                                     style: TextStyle(
                                       color: context.textPrimaryColor,
                                       fontWeight: FontWeight.bold,
@@ -319,8 +548,6 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                     ),
                     const SizedBox(height: 16),
                   ],
-
-                  // Details
                   _buildGlassCard(
                     context: context,
                     child: Padding(
@@ -348,15 +575,15 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                           const SizedBox(height: 16),
                           _buildMetadataRow(
                             'Created',
-                            _formatDate(widget.artwork.createdAt),
+                            _formatDate(artwork.createdAt),
                             context,
                           ),
                           _buildMetadataRow(
                             'Visibility',
-                            widget.artwork.isPublic ? 'Public' : 'Private',
+                            artwork.isPublic ? 'Public' : 'Private',
                             context,
                           ),
-                          if (widget.artwork.isNSFW)
+                          if (artwork.isNSFW)
                             _buildMetadataRow(
                               'Content',
                               'Contains NSFW content',
@@ -366,8 +593,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                       ),
                     ),
                   ),
-
-                  const SizedBox(height: 48), // Padding at bottom
+                  const SizedBox(height: 48),
                 ],
               ),
             ),
@@ -465,6 +691,17 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
     ];
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
+
+  String _formatDateTime(String value) {
+    final parsed = DateTime.tryParse(value);
+    if (parsed == null) return 'Unknown';
+    return _formatDate(parsed);
+  }
+
+  String _shortenAddress(String value) {
+    if (value.length <= 12) return value;
+    return '${value.substring(0, 6)}...${value.substring(value.length - 4)}';
+  }
 }
 
 class _ActionBtn extends StatelessWidget {
@@ -518,13 +755,9 @@ class _ActionBtn extends StatelessWidget {
             Flexible(
               child: Text(
                 label,
-                style: TextStyle(
-                  color: fgColor,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 14,
-                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: fgColor, fontWeight: FontWeight.w700),
               ),
             ),
           ],
