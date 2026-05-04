@@ -20,6 +20,8 @@ import 'notifications_screen.dart';
 import '../profile/artwork_detail_screen.dart';
 import 'saved_collections_screen.dart';
 import '../profile/profile_inspect_screen.dart';
+import '../chat/conversations_screen.dart';
+import '../../../core/auth_service.dart';
 
 class HomeTab extends StatefulWidget {
   const HomeTab({
@@ -28,12 +30,14 @@ class HomeTab extends StatefulWidget {
     this.isLoading = false,
     required this.onToggleTheme,
     required this.currentUser,
+    required this.authService,
   });
 
   final String userName;
   final bool isLoading;
   final VoidCallback onToggleTheme;
   final UserModel? currentUser;
+  final AuthService authService;
 
   @override
   State<HomeTab> createState() => _HomeTabState();
@@ -1058,6 +1062,20 @@ class _HomeTabState extends State<HomeTab> {
                             ),
                           ),
                           IconButton(
+                            onPressed: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => ConversationsScreen(
+                                  authService: widget.authService,
+                                ),
+                              ),
+                            ),
+                            icon: Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              color: textPrimary,
+                            ),
+                          ),
+                          IconButton(
                             onPressed: _openSavedCollections,
                             icon: Icon(
                               Icons.bookmark_rounded,
@@ -1192,6 +1210,8 @@ class _HomeTabState extends State<HomeTab> {
                                                   ProfileInspectScreen(
                                                     userId: artwork.user.id,
                                                     initialUser: artwork.user,
+                                                    authService:
+                                                        widget.authService,
                                                   ),
                                             ),
                                           );
