@@ -3,17 +3,22 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../../../core/api_client.dart';
+import '../../../core/preference_storage.dart';
 import '../../../core/services/image_generation_service.dart';
-import '../../../core/visioncraft_service.dart' show AIStyles;
+import '../../../core/visioncraft_service.dart';
 import '../../../features/subscription/models/subscription_model.dart';
 import '../../../features/subscription/services/subscription_service.dart';
 import '../../../features/subscription/widgets/quota_banner_widget.dart';
-import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
 import '../splash/widgets/smoke_background.dart';
+import '../../widgets/ai_audio_widgets.dart';
+import 'art_creation_model.dart';
+import 'create_step1_screen.dart';
+import 'create_step2_screen.dart';
 
-/// Create New Art screen — sends prompt to backend (`/image-generation/generate`)
-/// which proxies to HuggingFace FLUX.1-schnell. No client-side AI key needed.
+/// Two-step create flow (prompt / style) then image via backend
+/// [`/image-generation/generate`]. Result screen offers **one-tap** sonic
+/// generation (`AudioGenButton` → `/audio/for-image`).
 class CreateArtScreen extends StatefulWidget {
   const CreateArtScreen({super.key});
 
@@ -23,13 +28,13 @@ class CreateArtScreen extends StatefulWidget {
 
 class _CreateArtScreenState extends State<CreateArtScreen> {
   final _imageGen = ImageGenerationService();
-  final _promptController = TextEditingController();
-  final _negativePromptController = TextEditingController();
+  final _config = ArtCreationConfig();
+  final _visionCraft = VisionCraftService();
 
-  bool _loading = false;
+  int _step = 0;
+  bool _generating = false;
   String? _error;
-  Uint8List? _generatedImage;
-  AIStyles _selectedStyle = AIStyles.abstract;
+  Uint8List? _result;
 
   SubscriptionModel? _subscription;
 
@@ -43,66 +48,96 @@ class _CreateArtScreenState extends State<CreateArtScreen> {
     try {
       final sub = await SubscriptionService().getMySubscription();
       if (mounted) setState(() => _subscription = sub);
-    } catch (_) {
-      // Non-critical — server-side enforcement still applies.
-    }
+    } catch (_) {}
   }
 
-  @override
-  void dispose() {
-    _promptController.dispose();
-    _negativePromptController.dispose();
-    super.dispose();
+  void _goToStep2(ArtCreationConfig updated) {
+    _config.prompt = updated.prompt;
+    _config.negativePrompt = updated.negativePrompt;
+    _config.useNegativePrompt = updated.useNegativePrompt;
+    _config.useUserPersonality = updated.useUserPersonality;
+    setState(() {
+      _step = 1;
+      _result = null;
+      _error = null;
+    });
   }
 
-  Future<void> _generate() async {
-    final prompt = _promptController.text.trim();
-    if (prompt.isEmpty) {
-      setState(() {
-        _error = 'Enter a description for your art';
-        _generatedImage = null;
-      });
-      return;
-    }
+  void _goBack() {
+    setState(() {
+      _step = 0;
+      _result = null;
+      _error = null;
+    });
+  }
+
+  void _resetToStep1() {
+    setState(() {
+      _config.prompt = '';
+      _config.negativePrompt = '';
+      _step = 0;
+      _result = null;
+      _error = null;
+    });
+  }
+
+  Future<void> _generate(ArtCreationConfig updated) async {
+    _config.selectedVisualStyle = updated.selectedVisualStyle;
+    _config.aspectRatio = updated.aspectRatio;
+    _config.quality = updated.quality;
+
     if (_subscription != null && _subscription!.quotaExceeded) {
       setState(() {
-        _error = null;
-        _generatedImage = null;
+        _error =
+            'You have reached your generation limit. Upgrade or wait for renewal.';
       });
       return;
     }
+
+    final style = _config.selectedVisualStyle ?? kVisualStyles.first;
+    final prefs = await PreferenceStorage.load();
+    final enhanced = _config.buildEnhancedPrompt(
+      userSubjects: prefs.subjects,
+      userStyles: prefs.styles,
+      userColors: prefs.colors,
+      userMood: prefs.mood,
+      userComplexity: prefs.complexity,
+    );
+    final neg = _config.buildNegativePrompt(
+      styleHint: style.negativePromptHint,
+    );
+
     setState(() {
+      _generating = true;
       _error = null;
-      _loading = true;
-      _generatedImage = null;
+      _result = null;
     });
+
     try {
-      final result = await _imageGen.generateImage(
-        prompt: prompt,
-        negativePrompt: _negativePromptController.text.trim().isEmpty
-            ? null
-            : _negativePromptController.text.trim(),
-        style: _styleApiValue(_selectedStyle),
-        aspectRatio: 'square',
-        quality: 4,
+      final bytes = await _imageGen.generateImage(
+        prompt: enhanced,
+        negativePrompt: neg.isEmpty ? null : neg,
+        style: style.styleName,
+        aspectRatio: _config.aspectRatio.name,
+        quality: _config.quality,
       );
       if (mounted) {
         setState(() {
-          _loading = false;
-          _generatedImage = result;
+          _generating = false;
+          _result = bytes;
         });
       }
     } on ApiException catch (e) {
       if (mounted) {
         setState(() {
-          _loading = false;
+          _generating = false;
           _error = e.message;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _loading = false;
+          _generating = false;
           _error = e.toString();
         });
       }
@@ -111,209 +146,219 @@ class _CreateArtScreenState extends State<CreateArtScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = context.textPrimaryColor;
-    final textSecondary = context.textSecondaryColor;
-    final cardBg = context.cardBackgroundColor;
-    final border = context.borderColor;
+    if (_result != null) {
+      return SmokeBackground(
+        child: _CreateResultView(
+          imageBytes: _result!,
+          sonicKeywords: _sonicKeywordsFromConfig(_config),
+          onCreateAnother: _resetToStep1,
+        ),
+      );
+    }
 
-    return SmokeBackground(
-      child: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.auto_awesome,
-                    color: AppColors.primaryPurple,
-                    size: 28,
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Create New Art',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: textPrimary,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (_subscription != null)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+            child: QuotaBanner(subscription: _subscription!),
+          ),
+        Expanded(
+          child: _step == 0
+              ? CreateStep1Screen(
+                  config: _config,
+                  isVisionCraftConfigured: _visionCraft.isConfigured,
+                  onNext: _goToStep2,
+                )
+              : CreateStep2Screen(
+                  config: _config,
+                  generating: _generating,
+                  error: _error,
+                  onBack: _goBack,
+                  onGenerate: _generate,
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+String _sonicKeywordsFromConfig(ArtCreationConfig c) {
+  final style = c.selectedVisualStyle?.label ?? 'ambient';
+  final raw = c.prompt.trim();
+  final snippet = raw.length > 160 ? '${raw.substring(0, 160)}…' : raw;
+  if (snippet.isEmpty) {
+    return '$style, ambient, atmospheric, calm';
+  }
+  return '$style, $snippet';
+}
+
+class _CreateResultView extends StatefulWidget {
+  const _CreateResultView({
+    required this.imageBytes,
+    required this.sonicKeywords,
+    required this.onCreateAnother,
+  });
+
+  final Uint8List imageBytes;
+  final String sonicKeywords;
+  final VoidCallback onCreateAnother;
+
+  @override
+  State<_CreateResultView> createState() => _CreateResultViewState();
+}
+
+class _CreateResultViewState extends State<_CreateResultView> {
+  bool _isGeneratingAudio = false;
+  String? _audioUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final textSecondary = context.textSecondaryColor;
+
+    return Stack(
+      children: [
+        SafeArea(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 8),
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: widget.onCreateAnother,
+                      icon: const Icon(Icons.arrow_back_rounded),
+                      color: Colors.white70,
+                    ),
+                    const SizedBox(width: 4),
+                    const Expanded(
+                      child: Text(
+                        'Your creation',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
                           fontWeight: FontWeight.w700,
                         ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 120),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(20),
+                        child: Image.memory(
+                          widget.imageBytes,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Text(
+                        'Univers sonore',
+                        style: TextStyle(
+                          color: textSecondary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Un seul appui sur l’icône lance la génération audio.',
+                        style: TextStyle(
+                          color: textSecondary.withOpacity(0.85),
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: widget.onCreateAnother,
+                              icon: const Icon(Icons.add_photo_alternate_rounded,
+                                  size: 20),
+                              label: const Text(
+                                'Create another',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              style: FilledButton.styleFrom(
+                                backgroundColor: Colors.white.withOpacity(0.14),
+                                foregroundColor: Colors.white,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          AudioGenButton(
+                            artworkId: 'local',
+                            keywords: widget.sonicKeywords,
+                            onStarted: () => setState(() {
+                              _isGeneratingAudio = true;
+                              _audioUrl = null;
+                            }),
+                            onComplete: (url) => setState(() {
+                              _isGeneratingAudio = false;
+                              _audioUrl = url;
+                            }),
+                            onError: () => setState(() {
+                              _isGeneratingAudio = false;
+                            }),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        if (_isGeneratingAudio)
+          ColoredBox(
+            color: Colors.black.withOpacity(0.82),
+            child: const Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(color: Colors.white),
+                  SizedBox(height: 20),
+                  Text(
+                    'Composition de votre univers sonore…',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Ceci peut prendre une minute.',
+                    style: TextStyle(color: Colors.white54, fontSize: 13),
                   ),
                 ],
               ),
             ),
-            if (_subscription != null)
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                child: QuotaBanner(subscription: _subscription!),
-              ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Describe your idea',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: textSecondary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _promptController,
-                      maxLines: 3,
-                      decoration: InputDecoration(
-                        hintText: 'e.g. A serene mountain at sunset, digital art',
-                        filled: true,
-                        fillColor: cardBg,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: border),
-                        ),
-                      ),
-                      onChanged: (_) => setState(() => _error = null),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Negative prompt (optional)',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: textSecondary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _negativePromptController,
-                      maxLines: 1,
-                      decoration: InputDecoration(
-                        hintText: 'e.g. blur, low quality',
-                        filled: true,
-                        fillColor: cardBg,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: border),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Style',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: textSecondary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 48,
-                      child: DropdownButtonFormField<AIStyles>(
-                        value: _selectedStyle,
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: cardBg,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: border),
-                          ),
-                        ),
-                        dropdownColor: cardBg,
-                        items: AIStyles.values.map((s) {
-                          return DropdownMenuItem(
-                            value: s,
-                            child: Text(
-                              _styleLabel(s),
-                              style: TextStyle(color: textPrimary),
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (s) => setState(() => _selectedStyle = s ?? AIStyles.abstract),
-                      ),
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        _error!,
-                        style: TextStyle(color: AppColors.error, fontSize: 13),
-                      ),
-                    ],
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      height: 50,
-                      child: FilledButton.icon(
-                        onPressed: _loading ||
-                                (_subscription?.quotaExceeded ?? false)
-                            ? null
-                            : _generate,
-                        icon: _loading
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                              )
-                            : const Icon(Icons.auto_awesome, size: 22),
-                        label: Text(_loading ? 'Generating…' : 'Generate image'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primaryPurple,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (_generatedImage != null) ...[
-                      const SizedBox(height: 24),
-                      Text(
-                        'Result',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              color: textSecondary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                      const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Image.memory(
-                          _generatedImage!,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        if (_audioUrl != null)
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 24,
+            child: SimpleAudioPlayer(url: _audioUrl!),
+          ),
+      ],
     );
-  }
-
-  static String _styleLabel(AIStyles s) {
-    final name = s.name;
-    if (name.isEmpty) return name;
-    final withSpaces = name.replaceAllMapped(
-      RegExp(r'([A-Z])'),
-      (m) => ' ${m.group(1)}',
-    );
-    return '${withSpaces[0].toUpperCase()}${withSpaces.substring(1).toLowerCase()}'.trim();
-  }
-
-  /// Map enum -> backend style key (matches values handled in
-  /// backend ImageGenerationService.generateImage)
-  static String? _styleApiValue(AIStyles s) {
-    switch (s) {
-      case AIStyles.anime:
-        return 'anime';
-      case AIStyles.digitalArt:
-        return 'dreamescape';
-      case AIStyles.sketch:
-        return 'lineArt';
-      default:
-        return null;
-    }
   }
 }

@@ -27,7 +27,11 @@ class AudioGenButton extends StatefulWidget {
 }
 
 class _AudioGenButtonState extends State<AudioGenButton> {
+  bool _busy = false;
+
   Future<void> _generateAudio() async {
+    if (_busy) return;
+    setState(() => _busy = true);
     widget.onStarted();
     try {
       final kw = widget.keywords ?? 'ambient, calm, atmospheric';
@@ -44,27 +48,38 @@ class _AudioGenButtonState extends State<AudioGenButton> {
           SnackBar(content: Text('❌ Audio error: $e'), backgroundColor: Colors.red),
         );
       }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: widget.color ?? Colors.white.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(20),
-          onTap: _generateAudio,
-          child: const Padding(
-            padding: EdgeInsets.all(18),
-            child: Icon(Icons.music_note_rounded, color: Colors.white, size: 24),
+    return Tooltip(
+      message: 'Générer la musique IA',
+      child: FilledButton(
+        onPressed: _busy ? null : _generateAudio,
+        style: FilledButton.styleFrom(
+          backgroundColor: widget.color ?? Colors.white.withOpacity(0.16),
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: Colors.white.withOpacity(0.08),
+          padding: const EdgeInsets.all(18),
+          minimumSize: const Size(56, 56),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+            side: BorderSide(color: Colors.white.withOpacity(0.22)),
           ),
         ),
+        child: _busy
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Icon(Icons.music_note_rounded, size: 26),
       ),
     );
   }
