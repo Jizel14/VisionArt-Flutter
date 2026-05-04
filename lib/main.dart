@@ -6,7 +6,6 @@ import 'core/api_client.dart';
 import 'core/auth_service.dart';
 import 'core/app_config.dart';
 import 'core/signature_storage.dart';
-import 'core/preferences_service.dart';
 import 'presentation/theme/app_theme.dart';
 import 'presentation/screens/splash/splash_screen.dart';
 import 'presentation/screens/auth/auth_screen.dart';

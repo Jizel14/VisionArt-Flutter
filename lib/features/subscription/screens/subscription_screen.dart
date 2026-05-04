@@ -20,11 +20,22 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   bool _loading = true;
   bool _actionLoading = false;
   String? _error;
+  final _promoCtrl = TextEditingController();
+  String? _appliedPromo;
+  int? _discountPct;
+  double? _basePrice;
+  double? _finalPrice;
 
   @override
   void initState() {
     super.initState();
     _loadSubscription();
+  }
+
+  @override
+  void dispose() {
+    _promoCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _loadSubscription() async {
@@ -45,7 +56,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   Future<void> _startUpgrade() async {
     setState(() => _actionLoading = true);
     try {
-      final result = await _service.createCheckoutSession();
+      final result = await _service.createCheckoutSession(promoCode: _appliedPromo);
       if (!mounted) return;
       await Navigator.of(context).push(
         MaterialPageRoute(
@@ -112,6 +123,57 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
   }
 
+  Future<void> _applyPromo() async {
+    final v = _promoCtrl.text.trim();
+    if (v.isEmpty) {
+      setState(() {
+        _appliedPromo = null;
+        _discountPct = null;
+        _basePrice = null;
+        _finalPrice = null;
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Promo code removed')),
+        );
+      }
+      return;
+    }
+
+    setState(() => _actionLoading = true);
+    try {
+      final result = await _service.validatePromoCode(v);
+      if (!mounted) return;
+      if (!result.valid) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Invalid promo code'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+      setState(() {
+        _appliedPromo = v.toUpperCase();
+        _discountPct = result.discountPct;
+        _basePrice = result.basePrice;
+        _finalPrice = result.finalPrice;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Promo applied: ${_appliedPromo!}')),
+      );
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.message), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) setState(() => _actionLoading = false);
+    }
+  }
+
+  String _fmtPrice(double v) => '\$${v.toStringAsFixed(2)}';
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -126,6 +188,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
   Widget _buildContent() {
     final sub = _subscription ?? SubscriptionModel.defaultFree();
+    final showDiscount = sub.isFree && _appliedPromo != null && (_discountPct ?? 0) > 0;
 
     return RefreshIndicator(
       onRefresh: _loadSubscription,
@@ -166,7 +229,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             // ── Pro plan card ───────────────────────────────────────────────
             PlanCard(
               title: 'Pro',
-              price: '\$9.99',
+              originalPrice: showDiscount ? _fmtPrice(_basePrice ?? 9.99) : null,
+              price: showDiscount
+                  ? _fmtPrice(_finalPrice ?? 9.99)
+                  : '\$9.99',
               period: '/ month',
               features: const [
                 'Unlimited AI generations',
@@ -178,10 +244,65 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               isCurrent: sub.isPro,
               isHighlighted: true,
             ),
+            if (showDiscount) ...[
+              const SizedBox(height: 8),
+              Center(
+                child: Text(
+                  'Promo appliquée: ${_appliedPromo!} • ${_discountPct ?? 0}% de remise',
+                  style: TextStyle(color: Colors.green[700]),
+                ),
+              ),
+            ],
             const SizedBox(height: 32),
 
             // ── CTA ─────────────────────────────────────────────────────────
             if (sub.isFree) ...[
+              const Text(
+                'Promo code',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _promoCtrl,
+                      textCapitalization: TextCapitalization.characters,
+                      decoration: InputDecoration(
+                        hintText: 'Ex: WB30-7K3FP9',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  SizedBox(
+                    height: 48,
+                    child: OutlinedButton(
+                      onPressed: _actionLoading
+                          ? null
+                          : () {
+                              _applyPromo();
+                            },
+                      child: Text(_appliedPromo == null ? 'Apply' : 'Update'),
+                    ),
+                  ),
+                ],
+              ),
+              if (_appliedPromo != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  'Applied: ${_appliedPromo!}',
+                  style: TextStyle(color: Colors.green[700]),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+              const SizedBox(height: 16),
               SizedBox(
                 height: 52,
                 child: FilledButton(

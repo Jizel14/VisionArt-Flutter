@@ -8,6 +8,7 @@ import '../presentation/screens/home/home_tab.dart';
 import '../presentation/screens/create/create_art_screen.dart';
 import '../presentation/screens/marketplace/marketplace_screen.dart';
 import '../presentation/screens/profile/profile_screen.dart';
+import '../presentation/widgets/admin_announcement_banner.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
@@ -101,38 +102,46 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     return Scaffold(
-      body: IndexedStack(
-        index: _currentIndex,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          HomeTab(
-            userName: _user?['name'] ?? 'User',
-            currentUser: _currentUser,
-            isLoading: _loading,
-            onToggleTheme: widget.onToggleTheme,
-          ),
-          const CreateArtScreen(),
-          MarketplaceScreen(authService: widget.authService),
-          ProfileScreen(
-            authService: widget.authService,
-            apiClient: null,
-            userName: _user?['name'] ?? 'User',
-            userEmail: _user?['email'] ?? '',
-            avatarUrl: _user?['avatarUrl'],
-            userBio: _user?['bio'],
-            userPhoneNumber: _user?['phoneNumber'],
-            userWebsite: _user?['website'],
-            artworksCount: _user?['publicGenerationsCount'] ?? 0,
-            followersCount: _user?['followersCount'] ?? 0,
-            followingCount: _user?['followingCount'] ?? 0,
-            createdAt: _user?['createdAt'] != null
-                ? DateTime.tryParse(_user!['createdAt'])
-                : null,
-            isLoading: _loading,
-            onLogout: _logout,
-            onProfileUpdated: _loadProfile,
-            onRefreshProfile: _loadProfile,
-            onToggleTheme: widget.onToggleTheme,
-            onThemeChanged: (_) {},
+          const AdminAnnouncementBanner(),
+          Expanded(
+            child: IndexedStack(
+              index: _currentIndex,
+              children: [
+                HomeTab(
+                  userName: _user?['name'] ?? 'User',
+                  currentUser: _currentUser,
+                  isLoading: _loading,
+                  onToggleTheme: widget.onToggleTheme,
+                ),
+                const CreateArtScreen(),
+                MarketplaceScreen(authService: widget.authService),
+                ProfileScreen(
+                  authService: widget.authService,
+                  apiClient: null,
+                  userName: _user?['name'] ?? 'User',
+                  userEmail: _user?['email'] ?? '',
+                  avatarUrl: _user?['avatarUrl'],
+                  userBio: _user?['bio'],
+                  userPhoneNumber: _user?['phoneNumber'],
+                  userWebsite: _user?['website'],
+                  artworksCount: _user?['publicGenerationsCount'] ?? 0,
+                  followersCount: _user?['followersCount'] ?? 0,
+                  followingCount: _user?['followingCount'] ?? 0,
+                  createdAt: _user?['createdAt'] != null
+                      ? DateTime.tryParse(_user!['createdAt'])
+                      : null,
+                  isLoading: _loading,
+                  onLogout: _logout,
+                  onProfileUpdated: _loadProfile,
+                  onRefreshProfile: _loadProfile,
+                  onToggleTheme: widget.onToggleTheme,
+                  onThemeChanged: (_) {},
+                ),
+              ],
+            ),
           ),
         ],
       ),

@@ -9,10 +9,12 @@ class PlanCard extends StatelessWidget {
     required this.features,
     required this.isCurrent,
     required this.isHighlighted,
+    this.originalPrice,
   });
 
   final String title;
   final String price;
+  final String? originalPrice;
   final String period;
   final List<String> features;
   final bool isCurrent;
@@ -83,6 +85,20 @@ class PlanCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
+                if (originalPrice != null) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Text(
+                      originalPrice!,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                        decoration: TextDecoration.lineThrough,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                ],
                 Text(
                   price,
                   style: const TextStyle(

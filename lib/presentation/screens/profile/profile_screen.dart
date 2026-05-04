@@ -17,6 +17,7 @@ import 'edit_profile_screen.dart';
 import 'profile_artworks_overview_screen.dart';
 import 'profile_inspect_screen.dart';
 import 'widgets/sonic_universe_section.dart';
+import 'widgets/loyalty_section.dart';
 
 Future<void> _showDeleteAccountDialog(
   BuildContext context,
@@ -539,6 +540,8 @@ class ProfileScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           const SonicUniverseSection(),
+          const SizedBox(height: 12),
+          const LoyaltySection(),
           const SizedBox(height: 12),
           _GlassCard(
             child: ListTile(

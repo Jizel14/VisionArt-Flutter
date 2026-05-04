@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -22,8 +24,6 @@ import 'notifications_screen.dart';
 import '../profile/artwork_detail_screen.dart';
 import 'saved_collections_screen.dart';
 import '../profile/profile_inspect_screen.dart';
-import '../../widgets/admin_announcement_banner.dart';
-
 class HomeTab extends StatefulWidget {
   const HomeTab({
     super.key,
@@ -94,7 +94,7 @@ class _HomeTabState extends State<HomeTab> {
 
     try {
       final result = await _artworkService.getPublicFeed(
-        page: _currentPage,
+        page: math.max(1, _currentPage),
         limit: 10,
         sort: 'recent',
       );
@@ -105,7 +105,15 @@ class _HomeTabState extends State<HomeTab> {
         _hasMore = _currentPage < result.totalPages;
         _currentPage++;
       });
-    } catch (_) {
+    } catch (e) {
+      if (mounted && _currentPage == 1 && _artworks.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(userFacingApiError(e)),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
       setState(() => _isLoadingFeed = false);
     }
   }
@@ -1189,7 +1197,6 @@ class _HomeTabState extends State<HomeTab> {
     return SmokeBackground(
       child: Column(
         children: [
-          const AdminAnnouncementBanner(),
           Expanded(
             child: SafeArea(
               top: false,

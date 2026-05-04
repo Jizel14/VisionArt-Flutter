@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:io' show Platform;
 
 class CheckoutWebviewScreen extends StatefulWidget {
   const CheckoutWebviewScreen({
@@ -18,38 +20,69 @@ class CheckoutWebviewScreen extends StatefulWidget {
 }
 
 class _CheckoutWebviewScreenState extends State<CheckoutWebviewScreen> {
-  late final WebViewController _controller;
+  WebViewController? _controller;
   bool _isLoading = true;
+  bool _useExternalBrowser = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = WebViewController()
-      ..setJavaScriptMode(JavaScriptMode.unrestricted)
-      ..setNavigationDelegate(
-        NavigationDelegate(
-          onPageStarted: (_) => setState(() => _isLoading = true),
-          onPageFinished: (_) => setState(() => _isLoading = false),
-          onWebResourceError: (error) {
-            setState(() => _isLoading = false);
-          },
-          onNavigationRequest: (request) {
-            final url = request.url;
+    final isMobile = Platform.isAndroid || Platform.isIOS;
+    if (!isMobile) {
+      _useExternalBrowser = true;
+      _isLoading = false;
+      // Desktop/Linux: webview_flutter has no platform implementation → open browser instead.
+      _openExternal();
+      return;
+    }
 
-            // Intercept deep links BEFORE the browser opens them
-            if (url.startsWith('visionart://subscription/success')) {
-              _handleSuccess();
-              return NavigationDecision.prevent;
-            }
-            if (url.startsWith('visionart://subscription/cancel')) {
-              _handleCancel();
-              return NavigationDecision.prevent;
-            }
-            return NavigationDecision.navigate;
-          },
+    try {
+      _controller = WebViewController()
+        ..setJavaScriptMode(JavaScriptMode.unrestricted)
+        ..setNavigationDelegate(
+          NavigationDelegate(
+            onPageStarted: (_) => setState(() => _isLoading = true),
+            onPageFinished: (_) => setState(() => _isLoading = false),
+            onWebResourceError: (error) {
+              setState(() => _isLoading = false);
+            },
+            onNavigationRequest: (request) {
+              final url = request.url;
+
+              // Intercept deep links BEFORE the browser opens them
+              if (url.startsWith('visionart://subscription/success')) {
+                _handleSuccess();
+                return NavigationDecision.prevent;
+              }
+              if (url.startsWith('visionart://subscription/cancel')) {
+                _handleCancel();
+                return NavigationDecision.prevent;
+              }
+              return NavigationDecision.navigate;
+            },
+          ),
+        )
+        ..loadRequest(Uri.parse(widget.checkoutUrl));
+    } catch (_) {
+      // Safety net: if platform webview is not initialized for any reason,
+      // fallback to external browser.
+      _useExternalBrowser = true;
+      _isLoading = false;
+      _openExternal();
+    }
+  }
+
+  Future<void> _openExternal() async {
+    final uri = Uri.parse(widget.checkoutUrl);
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unable to open browser for checkout.'),
+          backgroundColor: Colors.red,
         ),
-      )
-      ..loadRequest(Uri.parse(widget.checkoutUrl));
+      );
+    }
   }
 
   void _handleSuccess() {
@@ -92,7 +125,52 @@ class _CheckoutWebviewScreenState extends State<CheckoutWebviewScreen> {
       ),
       body: Stack(
         children: [
-          WebViewWidget(controller: _controller),
+          if (_useExternalBrowser)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.open_in_browser, size: 44),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Checkout opened in your browser',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'On desktop, the in-app WebView is not supported.\nComplete the payment in the browser, then return here.',
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: _openExternal,
+                      child: const Text('Open checkout again'),
+                    ),
+                    const SizedBox(height: 8),
+                    FilledButton.tonal(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        widget.onSuccess();
+                      },
+                      child: const Text("I've paid → Refresh status"),
+                    ),
+                    const SizedBox(height: 8),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        widget.onCancel();
+                      },
+                      child: const Text('Close'),
+                    ),
+                  ],
+                ),
+              ),
+            )
+          else
+            WebViewWidget(controller: _controller!),
           if (_isLoading)
             const Center(child: CircularProgressIndicator()),
         ],

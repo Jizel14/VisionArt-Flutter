@@ -21,10 +21,14 @@ class SubscriptionService {
   // ── Create Stripe checkout session ────────────────────────────────────────
 
   Future<({String sessionId, String checkoutUrl})>
-      createCheckoutSession() async {
+      createCheckoutSession({String? promoCode}) async {
     try {
-      final response = await ApiClient.instance
-          .post('/subscriptions/create-checkout-session');
+      final response = await ApiClient.instance.post(
+        '/subscriptions/create-checkout-session',
+        data: promoCode == null || promoCode.trim().isEmpty
+            ? <String, dynamic>{}
+            : <String, dynamic>{'promoCode': promoCode.trim()},
+      );
       final data = response.data as Map<String, dynamic>;
       return (
         sessionId: data['sessionId'] as String,
@@ -33,6 +37,27 @@ class SubscriptionService {
     } on DioException catch (e) {
       final msg = (e.response?.data as Map?)?['message'] as String? ??
           'Failed to create checkout session';
+      throw ApiException(e.response?.statusCode ?? 500, msg);
+    }
+  }
+
+  Future<({bool valid, int discountPct, double basePrice, double finalPrice})>
+      validatePromoCode(String promoCode) async {
+    try {
+      final response = await ApiClient.instance.post(
+        '/subscriptions/validate-promo',
+        data: <String, dynamic>{'promoCode': promoCode.trim()},
+      );
+      final data = response.data as Map<String, dynamic>;
+      return (
+        valid: data['valid'] == true,
+        discountPct: (data['discountPct'] as num?)?.toInt() ?? 0,
+        basePrice: (data['basePrice'] as num?)?.toDouble() ?? 9.99,
+        finalPrice: (data['finalPrice'] as num?)?.toDouble() ?? 9.99,
+      );
+    } on DioException catch (e) {
+      final msg = (e.response?.data as Map?)?['message'] as String? ??
+          'Failed to validate promo code';
       throw ApiException(e.response?.statusCode ?? 500, msg);
     }
   }
