@@ -53,8 +53,8 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final textPrimary = context.textPrimaryColor;
-    final textSecondary = context.textSecondaryColor;
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -100,7 +100,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                   fit: BoxFit.cover,
                   errorWidget: (context, url, error) {
                     return Container(
-                      color: context.surfaceColor,
+                      color: AppThemeColors.surfaceColor(context),
                       child: const Icon(
                         Icons.broken_image_rounded,
                         size: 64,
@@ -297,7 +297,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                   Text(
                                     'Remixed from',
                                     style: TextStyle(
-                                      color: context.textSecondaryColor,
+                                      color: AppThemeColors.textSecondaryColor(context),
                                       fontSize: 12,
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -306,7 +306,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                   Text(
                                     widget.artwork.remixedFrom!.user.name,
                                     style: TextStyle(
-                                      color: context.textPrimaryColor,
+                                      color: AppThemeColors.textPrimaryColor(context),
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
@@ -340,7 +340,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
                                 'Details',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: context.textPrimaryColor,
+                                  color: AppThemeColors.textPrimaryColor(context),
                                 ),
                               ),
                             ],
@@ -387,12 +387,12 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
         filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
         child: Container(
           decoration: BoxDecoration(
-            color: context.cardBackgroundColor,
+            color: AppThemeColors.cardBackgroundColor(context),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: context.isDark
+              color: Theme.of(context).brightness == Brightness.dark
                   ? AppColors.primaryBlue.withOpacity(0.2)
-                  : context.borderColor.withOpacity(0.5),
+                  : AppThemeColors.borderColor(context).withOpacity(0.5),
             ),
           ),
           child: child,
@@ -409,7 +409,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.w800,
-            color: context.textPrimaryColor,
+            color: AppThemeColors.textPrimaryColor(context),
           ),
         ),
         const SizedBox(height: 4),
@@ -417,7 +417,7 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
           label,
           style: TextStyle(
             fontSize: 13,
-            color: context.textSecondaryColor,
+            color: AppThemeColors.textSecondaryColor(context),
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -433,14 +433,14 @@ class _ArtworkDetailScreenState extends State<ArtworkDetailScreen> {
         children: [
           Text(
             label,
-            style: TextStyle(fontSize: 14, color: context.textSecondaryColor),
+            style: TextStyle(fontSize: 14, color: AppThemeColors.textSecondaryColor(context)),
           ),
           Text(
             value,
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: context.textPrimaryColor,
+              color: AppThemeColors.textPrimaryColor(context),
             ),
           ),
         ],
@@ -496,8 +496,8 @@ class _ActionBtn extends StatelessWidget {
       bgColor = isDark
           ? Colors.white.withOpacity(0.05)
           : Colors.black.withOpacity(0.04);
-      fgColor = context.textPrimaryColor;
-      borderColor = context.borderColor.withOpacity(0.5);
+      fgColor = AppThemeColors.textPrimaryColor(context);
+      borderColor = AppThemeColors.borderColor(context).withOpacity(0.5);
     }
 
     return InkWell(

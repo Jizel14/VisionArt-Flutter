@@ -193,7 +193,7 @@ class _PreferencesContextState extends State<PreferencesContext> {
                 children: [
                   Row(
                     children: [
-                      Icon(icon, size: 18, color: context.textPrimaryColor),
+                      Icon(icon, size: 18, color: AppThemeColors.textPrimaryColor(context)),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
@@ -201,7 +201,7 @@ class _PreferencesContextState extends State<PreferencesContext> {
                           style: TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
-                            color: context.textPrimaryColor,
+                            color: AppThemeColors.textPrimaryColor(context),
                           ),
                         ),
                       ),
@@ -214,7 +214,7 @@ class _PreferencesContextState extends State<PreferencesContext> {
                       description,
                       style: TextStyle(
                         fontSize: 12,
-                        color: context.textSecondaryColor,
+                        color: AppThemeColors.textSecondaryColor(context),
                       ),
                     ),
                   ),
@@ -254,7 +254,7 @@ class _PreferencesContextState extends State<PreferencesContext> {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: context.borderColor),
+        border: Border.all(color: AppThemeColors.borderColor(context)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: DropdownButton<String>(

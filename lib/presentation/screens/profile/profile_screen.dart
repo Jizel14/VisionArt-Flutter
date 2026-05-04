@@ -15,7 +15,7 @@ import '../../theme/theme_extensions.dart';
 import '../../widgets/social_share_sheet.dart';
 import '../preferences/preferences_screen.dart';
 import '../report/report_screen.dart';
-import '../splash/widgets/smoke_background.dart';
+import 'package:visionart_mobile/presentation/screens/splash/widgets/app_background_wrapper.dart';
 import '../signature/signature_editor_screen.dart';
 import 'artwork_detail_screen.dart';
 import 'edit_profile_screen.dart';
@@ -252,7 +252,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return SmokeBackground(
+    return AppBackgroundWrapper(
       child: SafeArea(
         child: widget.isLoading
             ? _buildShimmerLoading(context)
@@ -262,8 +262,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildShimmerLoading(BuildContext context) {
-    final border = context.borderColor;
-    final secondary = context.textSecondaryColor;
+    final border = AppThemeColors.borderColor(context);
+    final secondary = AppThemeColors.textSecondaryColor(context);
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -315,8 +315,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   Widget _shimmerCard(BuildContext context) {
     return Shimmer.fromColors(
-      baseColor: context.borderColor,
-      highlightColor: context.textSecondaryColor.withOpacity(0.3),
+      baseColor: AppThemeColors.borderColor(context),
+      highlightColor: AppThemeColors.textSecondaryColor(context).withOpacity(0.3),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: BackdropFilter(
@@ -325,9 +325,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             height: 80,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: context.cardBackgroundColor.withOpacity(0.8),
+              color: AppThemeColors.cardBackgroundColor(context).withOpacity(0.8),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: context.borderColor.withOpacity(0.5)),
+              border: Border.all(color: AppThemeColors.borderColor(context).withOpacity(0.5)),
             ),
           ),
         ),
@@ -336,8 +336,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   Widget _buildContent(BuildContext context) {
-    final textPrimary = context.textPrimaryColor;
-    final textSecondary = context.textSecondaryColor;
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
     return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
       child: Column(
@@ -602,7 +602,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 Theme.of(context).brightness == Brightness.dark
                     ? Icons.light_mode_rounded
                     : Icons.dark_mode_rounded,
-                color: textSecondary,
+                color: AppThemeColors.textSecondaryColor(context),
               ),
               title: Text(
                 Theme.of(context).brightness == Brightness.dark
@@ -619,7 +619,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           _GlassCard(
             child: ListTile(
-              leading: Icon(Icons.settings_rounded, color: textSecondary),
+              leading: Icon(Icons.settings_rounded, color: AppThemeColors.textSecondaryColor(context)),
               title: Text(
                 'Preferences',
                 style: TextStyle(
@@ -727,17 +727,17 @@ class _GlassCard extends StatelessWidget {
         filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
         child: Container(
           decoration: BoxDecoration(
-            color: context.cardBackgroundColor,
+            color: AppThemeColors.cardBackgroundColor(context),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: context.isDark
-                  ? AppColors.primaryBlue.withValues(alpha: 0.25)
-                  : context.borderColor.withValues(alpha: 0.6),
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? AppColors.primaryBlue.withOpacity(0.25)
+                  : AppThemeColors.borderColor(context).withOpacity(0.6),
               width: 1,
             ),
             boxShadow: [
               BoxShadow(
-                color: AppColors.primaryPurple.withValues(alpha: 0.12),
+                color: AppColors.primaryPurple.withOpacity(0.12),
                 blurRadius: 16,
                 offset: const Offset(0, 4),
               ),
@@ -765,8 +765,8 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = context.textPrimaryColor;
-    final textSecondary = context.textSecondaryColor;
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
     return GestureDetector(
       onTap: onTap,
       child: _GlassCard(
@@ -816,8 +816,8 @@ class _MyArtworkCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = context.textPrimaryColor;
-    final textSecondary = context.textSecondaryColor;
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
 
     return SizedBox(
       width: 220,
@@ -839,7 +839,7 @@ class _MyArtworkCard extends StatelessWidget {
                         width: double.infinity,
                         height: double.infinity,
                         errorWidget: (_, __, ___) => Container(
-                          color: context.surfaceColor,
+                          color: AppThemeColors.surfaceColor(context),
                           child: const Icon(Icons.image_not_supported_rounded),
                         ),
                       ),
@@ -940,19 +940,19 @@ class _QuickAction extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         decoration: BoxDecoration(
-          color: context.surfaceColor.withOpacity(0.4),
+          color: AppThemeColors.surfaceColor(context).withOpacity(0.4),
           borderRadius: BorderRadius.circular(999),
-          border: Border.all(color: context.borderColor.withOpacity(0.4)),
+          border: Border.all(color: AppThemeColors.borderColor(context).withOpacity(0.4)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 13, color: context.textSecondaryColor),
+            Icon(icon, size: 13, color: AppThemeColors.textSecondaryColor(context)),
             const SizedBox(width: 4),
             Text(
               label,
               style: TextStyle(
-                color: context.textSecondaryColor,
+                color: AppThemeColors.textSecondaryColor(context),
                 fontSize: 11,
                 fontWeight: FontWeight.w600,
               ),

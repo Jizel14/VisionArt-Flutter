@@ -7,7 +7,7 @@ import '../../../core/mock_image_urls.dart';
 import '../../../core/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
-import '../splash/widgets/smoke_background.dart';
+import 'package:visionart_mobile/presentation/screens/splash/widgets/app_background_wrapper.dart';
 import '../report/report_screen.dart';
 import 'art_detail_screen.dart';
 
@@ -66,10 +66,10 @@ class MarketplaceScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = context.textPrimaryColor;
-    final textSecondary = context.textSecondaryColor;
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
 
-    return SmokeBackground(
+    return AppBackgroundWrapper(
       child: SafeArea(
         child: CustomScrollView(
           slivers: [
@@ -278,8 +278,8 @@ class _ListingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cardBg = context.cardBackgroundColor;
-    final border = context.borderColor;
+    final cardBg = AppThemeColors.cardBackgroundColor(context);
+    final border = AppThemeColors.borderColor(context);
 
     return GestureDetector(
       onTap: onTap,

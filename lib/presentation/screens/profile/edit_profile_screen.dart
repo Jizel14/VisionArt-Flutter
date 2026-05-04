@@ -4,7 +4,7 @@ import '../../../core/auth_service.dart';
 import '../../../core/api_client.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
-import '../splash/widgets/smoke_background.dart';
+import 'package:visionart_mobile/presentation/screens/splash/widgets/app_background_wrapper.dart';
 
 /// Edit profile: name, email, bio, avatar, phone, website; saved via backend PATCH /auth/me.
 class EditProfileScreen extends StatefulWidget {
@@ -160,11 +160,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         labelText: label,
         hintText: hint,
         filled: true,
-        fillColor: context.cardBackgroundColor,
+        fillColor: AppThemeColors.cardBackgroundColor(context),
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: context.borderColor),
+          borderSide: BorderSide(color: AppThemeColors.borderColor(context)),
         ),
       ),
       onChanged: (_) => setState(() => _error = null),
@@ -173,7 +173,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = context.textPrimaryColor;
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -185,7 +185,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
-      body: SmokeBackground(
+      body: AppBackgroundWrapper(
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(24),
@@ -205,13 +205,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         errorBuilder: (_, __, ___) => Container(
                           height: 120,
                           decoration: BoxDecoration(
-                            color: context.cardBackgroundColor,
+                            color: AppThemeColors.cardBackgroundColor(context),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Center(
                             child: Icon(
                               Icons.image_not_supported_outlined,
-                              color: context.textSecondaryColor,
+                              color: AppThemeColors.textSecondaryColor(context),
                             ),
                           ),
                         ),

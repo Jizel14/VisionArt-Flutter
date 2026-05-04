@@ -88,6 +88,7 @@ class ArtCreationConfig {
     this.aspectRatio = ArtAspectRatio.square,
     this.quality = 3,
     this.useUserPersonality = true,
+    this.generateSimilar = false,
   });
 
   String prompt;
@@ -97,6 +98,7 @@ class ArtCreationConfig {
   ArtAspectRatio aspectRatio;
   int quality; // 1–5
   bool useUserPersonality;
+  bool generateSimilar;
 
   /// Build an intelligent enhanced prompt combining user input + personality.
   String buildEnhancedPrompt({

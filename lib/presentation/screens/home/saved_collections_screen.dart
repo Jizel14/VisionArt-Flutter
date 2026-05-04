@@ -3,7 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../../core/services/artwork_service.dart';
 import '../../../core/models/artwork_model.dart';
 import '../../theme/theme_extensions.dart';
-import '../splash/widgets/smoke_background.dart';
+import 'package:visionart_mobile/presentation/screens/splash/widgets/app_background_wrapper.dart';
 
 class SavedCollectionsScreen extends StatefulWidget {
   const SavedCollectionsScreen({super.key});
@@ -76,8 +76,8 @@ class _SavedCollectionsScreenState extends State<SavedCollectionsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = context.textPrimaryColor;
-    final textSecondary = context.textSecondaryColor;
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
     final totalSaved = _collections.fold<int>(
       0,
       (sum, item) => sum + item.itemsCount,
@@ -91,7 +91,7 @@ class _SavedCollectionsScreenState extends State<SavedCollectionsScreen> {
         backgroundColor: Colors.transparent,
         title: const Text('Saved Collections'),
       ),
-      body: SmokeBackground(
+      body: AppBackgroundWrapper(
         child: Padding(
           padding: EdgeInsets.only(
             top: kToolbarHeight + MediaQuery.of(context).padding.top,
@@ -104,10 +104,10 @@ class _SavedCollectionsScreenState extends State<SavedCollectionsScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: context.cardBackgroundColor,
+                    color: AppThemeColors.cardBackgroundColor(context),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: context.borderColor.withOpacity(0.45),
+                      color: AppThemeColors.borderColor(context).withOpacity(0.45),
                     ),
                   ),
                   child: Row(
@@ -204,7 +204,7 @@ class _SavedCollectionsScreenState extends State<SavedCollectionsScreen> {
                           final artwork = _savedArtworks[index];
                           return Container(
                             decoration: BoxDecoration(
-                              color: context.cardBackgroundColor,
+                              color: AppThemeColors.cardBackgroundColor(context),
                               borderRadius: BorderRadius.circular(14),
                             ),
                             child: Row(

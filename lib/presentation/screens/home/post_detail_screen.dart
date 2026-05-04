@@ -72,9 +72,9 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = context.textPrimaryColor;
-    final textSecondary = context.textSecondaryColor;
-    final cardBg = context.cardBackgroundColor;
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
+    final cardBg = AppThemeColors.cardBackgroundColor(context);
     final commentsList = _mockCommentsFor(widget.author);
     final displayed = _showAllComments ? commentsList : commentsList.take(_commentsPreview).toList();
     final hasMore = commentsList.length > _commentsPreview;
@@ -99,7 +99,7 @@ class _PostDetailScreenState extends State<PostDetailScreen> {
                   decoration: BoxDecoration(
                     color: cardBg,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: context.borderColor.withOpacity(0.5)),
+                    border: Border.all(color: AppThemeColors.borderColor(context).withOpacity(0.5)),
                     boxShadow: [
                       BoxShadow(
                         color: AppColors.primaryPurple.withOpacity(0.15),

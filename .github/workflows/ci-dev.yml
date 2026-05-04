@@ -6,47 +6,49 @@ on:
   pull_request:
     branches: [dev]
 
-permissions:
-  contents: read
-  packages: write
-
 jobs:
-  docker-build:
-    name: Build & push Docker image (dev)
+  flutter-ci:
+    name: Analyze · Test · Build APK (debug)
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Flutter (analyze only – fast)
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.x'
           channel: 'stable'
           cache: true
 
-      - name: Install dependencies & analyze
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed .
+        continue-on-error: true
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: Run tests
+        run: flutter test --no-pub
+        continue-on-error: true
+
+      - name: Build debug APK
         run: |
-          flutter pub get
-          flutter analyze --no-fatal-infos
+          flutter build apk --debug \
+            --dart-define=VISIONCRAFT_API_KEY=${{ secrets.VISIONCRAFT_API_KEY || '' }} \
+            --dart-define=GOOGLE_WEB_CLIENT_ID=${{ secrets.GOOGLE_WEB_CLIENT_ID || '' }}
 
-      - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+      - name: Upload debug APK artifact
+        uses: actions/upload-artifact@v4
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          name: visionart-debug-apk-${{ github.sha }}
+          path: build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 7
 
-      - name: Build & push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          target: production
-          push: true
-          build-args: |
-            VISIONCRAFT_API_KEY=${{ secrets.VISIONCRAFT_API_KEY }}
-            GOOGLE_WEB_CLIENT_ID=${{ secrets.GOOGLE_WEB_CLIENT_ID }}
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/visionart-flutter:dev
-            ghcr.io/${{ github.repository_owner }}/visionart-flutter:dev-${{ github.sha }}
+      - name: Notify on success
+        if: success()
+        run: echo "✅ dev CI passed – ${{ github.sha }}"

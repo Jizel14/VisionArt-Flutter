@@ -7,7 +7,7 @@ import '../../../core/preference_storage.dart';
 import '../../../core/user_preferences.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
-import '../splash/widgets/smoke_background.dart';
+import 'package:visionart_mobile/presentation/screens/splash/widgets/app_background_wrapper.dart';
 import 'art_creation_model.dart';
 
 /// Step 1: Prompt, Negative Prompt, and Personality toggle.
@@ -109,12 +109,12 @@ class _CreateStep1ScreenState extends State<CreateStep1Screen> {
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = context.textPrimaryColor;
-    final textSecondary = context.textSecondaryColor;
-    final cardBg = context.cardBackgroundColor;
-    final borderCol = context.borderColor;
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
+    final cardBg = AppThemeColors.cardBackgroundColor(context);
+    final borderCol = AppThemeColors.borderColor(context);
 
-    return SmokeBackground(
+    return AppBackgroundWrapper(
       child: SafeArea(
         child: Column(
           children: [

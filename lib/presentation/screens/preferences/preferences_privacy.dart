@@ -69,7 +69,7 @@ class _PreferencesPrivacyState extends State<PreferencesPrivacy> {
           ),
           Text(
             'How long to keep your generated images',
-            style: TextStyle(fontSize: 12, color: context.textSecondaryColor),
+            style: TextStyle(fontSize: 12, color: AppThemeColors.textSecondaryColor(context)),
           ),
           const SizedBox(height: 12),
           _buildRetentionOptions(),
@@ -115,7 +115,7 @@ class _PreferencesPrivacyState extends State<PreferencesPrivacy> {
                     Icon(
                       Icons.gavel_rounded,
                       size: 16,
-                      color: context.textPrimaryColor,
+                      color: AppThemeColors.textPrimaryColor(context),
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -123,7 +123,7 @@ class _PreferencesPrivacyState extends State<PreferencesPrivacy> {
                       style: TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.bold,
-                        color: context.textPrimaryColor,
+                        color: AppThemeColors.textPrimaryColor(context),
                       ),
                     ),
                   ],
@@ -133,7 +133,7 @@ class _PreferencesPrivacyState extends State<PreferencesPrivacy> {
                   'We respect your privacy and comply with GDPR. You have the right to access, modify, or delete your data at any time.',
                   style: TextStyle(
                     fontSize: 11,
-                    color: context.textSecondaryColor,
+                    color: AppThemeColors.textSecondaryColor(context),
                   ),
                 ),
               ],
@@ -180,7 +180,7 @@ class _PreferencesPrivacyState extends State<PreferencesPrivacy> {
             style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: context.textPrimaryColor,
+              color: AppThemeColors.textPrimaryColor(context),
             ),
           ),
         ],
@@ -209,7 +209,7 @@ class _PreferencesPrivacyState extends State<PreferencesPrivacy> {
               setState(() => _dataRetentionPeriod = option.value),
           selectedColor: AppColors.primaryPurple.withOpacity(0.3),
           side: BorderSide(
-            color: isSelected ? AppColors.primaryPurple : context.borderColor,
+            color: isSelected ? AppColors.primaryPurple : AppThemeColors.borderColor(context),
             width: isSelected ? 2 : 1,
           ),
         );
@@ -229,7 +229,7 @@ class _PreferencesPrivacyState extends State<PreferencesPrivacy> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: context.borderColor),
+        border: Border.all(color: AppThemeColors.borderColor(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -242,7 +242,7 @@ class _PreferencesPrivacyState extends State<PreferencesPrivacy> {
                   children: [
                     Row(
                       children: [
-                        Icon(icon, size: 18, color: context.textPrimaryColor),
+                        Icon(icon, size: 18, color: AppThemeColors.textPrimaryColor(context)),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -250,7 +250,7 @@ class _PreferencesPrivacyState extends State<PreferencesPrivacy> {
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.bold,
-                              color: context.textPrimaryColor,
+                              color: AppThemeColors.textPrimaryColor(context),
                             ),
                           ),
                         ),
@@ -263,7 +263,7 @@ class _PreferencesPrivacyState extends State<PreferencesPrivacy> {
                         description,
                         style: TextStyle(
                           fontSize: 12,
-                          color: context.textSecondaryColor,
+                          color: AppThemeColors.textSecondaryColor(context),
                         ),
                       ),
                     ),

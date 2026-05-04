@@ -93,8 +93,8 @@ class _SignatureEditorScreenState extends State<SignatureEditorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = context.textPrimaryColor;
-    final textSecondary = context.textSecondaryColor;
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -124,9 +124,9 @@ class _SignatureEditorScreenState extends State<SignatureEditorScreen> {
                   key: _canvasKey,
                   child: Container(
                     decoration: BoxDecoration(
-                      color: context.cardBackgroundColor,
+                      color: AppThemeColors.cardBackgroundColor(context),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: context.borderColor),
+                      border: Border.all(color: AppThemeColors.borderColor(context)),
                     ),
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(16),

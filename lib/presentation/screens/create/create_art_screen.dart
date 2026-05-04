@@ -1,14 +1,25 @@
+import 'dart:convert';
 import 'dart:typed_data';
-
+import 'dart:ui';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:animate_do/animate_do.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_vision_craft/flutter_vision_craft.dart';
-
+import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../../core/models/artwork_model.dart';
+import '../../../core/preference_storage.dart';
+import '../../../core/services/artwork_service.dart';
 import '../../../core/visioncraft_service.dart';
+import '../../../core/web_download.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
-import '../splash/widgets/smoke_background.dart';
+import 'package:visionart_mobile/presentation/screens/splash/widgets/app_background_wrapper.dart';
+import 'art_creation_model.dart';
+import 'create_step1_screen.dart';
+import 'create_step2_screen.dart';
 
-/// Create New Art screen: prompt input, style picker, generate via VisionCraft API.
+/// Multi-step art creation flow controller.
+/// Manages the 2-step process: [CreateStep1Screen] → [CreateStep2Screen] → result.
 class CreateArtScreen extends StatefulWidget {
   const CreateArtScreen({super.key});
 
@@ -17,14 +28,13 @@ class CreateArtScreen extends StatefulWidget {
 }
 
 class _CreateArtScreenState extends State<CreateArtScreen> {
-  late final VisionCraftService _visionCraft;
-  final _promptController = TextEditingController();
-  final _negativePromptController = TextEditingController();
-
-  bool _loading = false;
+  int _step = 0; // 0 = step1, 1 = step2
+  final _config = ArtCreationConfig();
+  bool _generating = false;
   String? _error;
-  Uint8List? _generatedImage;
-  AIStyles _selectedStyle = AIStyles.abstract;
+  Uint8List? _result;
+  String? _artworkId;
+  late final VisionCraftService _visionCraft;
 
   @override
   void initState() {
@@ -32,268 +42,850 @@ class _CreateArtScreenState extends State<CreateArtScreen> {
     _visionCraft = VisionCraftService();
   }
 
-  @override
-  void dispose() {
-    _promptController.dispose();
-    _negativePromptController.dispose();
-    super.dispose();
+  void _goToStep2(ArtCreationConfig updatedConfig) {
+    _config.prompt = updatedConfig.prompt;
+    _config.negativePrompt = updatedConfig.negativePrompt;
+    _config.useNegativePrompt = updatedConfig.useNegativePrompt;
+    _config.useUserPersonality = updatedConfig.useUserPersonality;
+    setState(() {
+      _step = 1;
+      _result = null;
+      _error = null;
+    });
   }
 
-  Future<void> _generate() async {
-    final prompt = _promptController.text.trim();
-    if (prompt.isEmpty) {
-      setState(() {
-        _error = 'Enter a description for your art';
-        _generatedImage = null;
-      });
-      return;
-    }
+  void _goBack() {
+    setState(() {
+      _step = 0;
+      _result = null;
+      _error = null;
+    });
+  }
+
+  Future<void> _generate(ArtCreationConfig updatedConfig) async {
+    _config.selectedVisualStyle = updatedConfig.selectedVisualStyle;
+    _config.aspectRatio = updatedConfig.aspectRatio;
+    _config.quality = updatedConfig.quality;
+
     if (!_visionCraft.isConfigured) {
       setState(() {
-        _error = 'VisionCraft API key not set. Use --dart-define=VISIONCRAFT_API_KEY=your_key';
-        _generatedImage = null;
+        _error = 'Set your VISIONCRAFT_API_KEY in the .env file to generate images.';
       });
       return;
     }
+
     setState(() {
+      _generating = true;
       _error = null;
-      _loading = true;
-      _generatedImage = null;
+      _result = null;
     });
+
     try {
-      final result = await _visionCraft.generateImage(
-        prompt: prompt,
-        aiStyle: _selectedStyle,
-        negativePrompt: _negativePromptController.text.trim().isEmpty
-            ? null
-            : _negativePromptController.text.trim(),
-        nsfwFilter: true,
-        watermark: false,
+      // Load user personality preferences for intelligent prompt enrichment
+      final prefs = await PreferenceStorage.load();
+
+      final style = _config.selectedVisualStyle;
+      final enhancedPrompt = _config.buildEnhancedPrompt(
+        userSubjects: prefs.subjects,
+        userStyles: prefs.styles,
+        userColors: prefs.colors,
+        userMood: prefs.mood,
+        userComplexity: prefs.complexity,
       );
+
+      final negPpt = _config.buildNegativePrompt(
+        styleHint: style?.negativePromptHint,
+      );
+
+      final styleName = style?.styleName ?? kVisualStyles.first.styleName;
+
+      final response = await _visionCraft.generateImage(
+        prompt: enhancedPrompt,
+        styleName: styleName,
+        negativePrompt: negPpt,
+        aspectRatio: _config.aspectRatio.name,
+        quality: _config.quality,
+        generateSimilar: _config.generateSimilar,
+      );
+
       if (mounted) {
         setState(() {
-          _loading = false;
-          _generatedImage = result;
-          _error = result == null ? 'Failed to generate image' : null;
+          _generating = false;
+          if (response != null) {
+            _result = response['imageBytes'];
+            _artworkId = response['artworkId'];
+          }
+          _error = response == null ? 'Failed to generate image. Try again.' : null;
         });
       }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _loading = false;
-          _generatedImage = null;
-          _error = e.toString();
+          _generating = false;
+          _error = 'Error: ${e.toString()}';
         });
       }
     }
   }
 
+  void _resetToStep1() {
+    setState(() {
+      _config.prompt = '';
+      _config.negativePrompt = '';
+      _step = 0;
+      _result = null;
+      _error = null;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final textPrimary = context.textPrimaryColor;
-    final textSecondary = context.textSecondaryColor;
-    final cardBg = context.cardBackgroundColor;
-    final border = context.borderColor;
+    if (_result != null) {
+      return _ResultView(
+        imageBytes: _result!,
+        artworkId: _artworkId,
+        onCreateAnother: _resetToStep1,
+      );
+    }
 
-    return SmokeBackground(
-      child: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.auto_awesome,
-                    color: AppColors.primaryPurple,
-                    size: 28,
-                  ),
-                  const SizedBox(width: 10),
-                  Text(
-                    'Create New Art',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          color: textPrimary,
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                ],
-              ),
+    if (_step == 0) {
+      return CreateStep1Screen(
+        config: _config,
+        isVisionCraftConfigured: _visionCraft.isConfigured,
+        onNext: _goToStep2,
+      );
+    }
+
+    return CreateStep2Screen(
+      config: _config,
+      generating: _generating,
+      error: _error,
+      onBack: _goBack,
+      onGenerate: _generate,
+    );
+  }
+}
+
+/// Full-screen result viewer shown after a successful generation.
+class _ResultView extends StatefulWidget {
+  const _ResultView({
+    required this.imageBytes,
+    required this.onCreateAnother,
+    this.artworkId,
+  });
+
+  final Uint8List imageBytes;
+  final VoidCallback onCreateAnother;
+  final String? artworkId;
+
+  @override
+  State<_ResultView> createState() => _ResultViewState();
+}
+
+class _ResultViewState extends State<_ResultView> {
+  bool _isSaving = false;
+
+  // ── Similar artworks (loaded async after generation) ──────────────────
+  final _artworkService = ArtworkService();
+  List<ArtworkModel> _similarArtworks = [];
+  bool _loadingSimilar = false;
+  bool _similarLoaded = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.artworkId != null) {
+      _fetchSimilarArtworks();
+    }
+  }
+
+  Future<void> _fetchSimilarArtworks() async {
+    setState(() => _loadingSimilar = true);
+    try {
+      final result = await _artworkService.getSimilarArtworks(
+        widget.artworkId!,
+        limit: 6,
+        generate: true,
+      );
+      if (mounted) {
+        setState(() {
+          _similarArtworks = result;
+          _loadingSimilar = false;
+          _similarLoaded = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loadingSimilar = false;
+          _similarLoaded = true;
+        });
+      }
+    }
+  }
+
+  Future<void> _saveImage() async {
+    setState(() => _isSaving = true);
+    try {
+      if (kIsWeb) {
+        downloadWebImage(widget.imageBytes, 'visionart_${DateTime.now().millisecondsSinceEpoch}.png');
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            _buildSnackBar('✅ Download started!', success: true),
+          );
+        }
+      } else {
+        final result = await ImageGallerySaverPlus.saveImage(
+          widget.imageBytes,
+          quality: 100,
+          name: 'visionart_${DateTime.now().millisecondsSinceEpoch}',
+        );
+        final saved = result['isSuccess'] == true;
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            _buildSnackBar(
+              saved ? '🎨 Saved to Gallery!' : '❌ Could not save. Try again.',
+              success: saved,
             ),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    if (!_visionCraft.isConfigured)
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        margin: const EdgeInsets.only(bottom: 16),
-                        decoration: BoxDecoration(
-                          color: AppColors.error.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.error.withOpacity(0.5)),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          _buildSnackBar('❌ Error saving image: $e', success: false),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  SnackBar _buildSnackBar(String msg, {required bool success}) {
+    return SnackBar(
+      content: Text(msg, style: const TextStyle(fontWeight: FontWeight.bold)),
+      backgroundColor: success ? Colors.green.shade700 : Colors.red.shade700,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      margin: const EdgeInsets.all(16),
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+  ImageProvider? _imageProviderFor(ArtworkModel art) {
+    if (art.imageUrl.startsWith('data:image')) {
+      return MemoryImage(base64Decode(art.imageUrl.split(',').last));
+    } else if (art.imageUrl.startsWith('http')) {
+      return NetworkImage(art.imageUrl);
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
+          // 1. Dynamic Blurred Background
+          Image.memory(widget.imageBytes, fit: BoxFit.cover),
+          Positioned.fill(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 40, sigmaY: 40),
+              child: Container(color: Colors.black.withOpacity(0.55)),
+            ),
+          ),
+
+          SafeArea(
+            child: Column(
+              children: [
+                // 2. Glass Header
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      GestureDetector(
+                        onTap: widget.onCreateAnother,
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: Colors.white.withOpacity(0.2)),
+                          ),
+                          child: const Icon(Icons.close_rounded, color: Colors.white, size: 22),
                         ),
-                        child: Row(
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white.withOpacity(0.2)),
+                        ),
+                        child: const Row(
                           children: [
-                            Icon(Icons.info_outline_rounded, color: AppColors.error, size: 22),
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: Text(
-                                'Set VISIONCRAFT_API_KEY (from VisionCraft Telegram bot) to generate images.',
-                                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: textPrimary,
-                                    ),
-                              ),
-                            ),
+                            Icon(Icons.auto_awesome, color: Colors.white, size: 16),
+                            SizedBox(width: 8),
+                            Text('Masterpiece',
+                                style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.5,
+                                    fontSize: 13)),
                           ],
                         ),
                       ),
-                    Text(
-                      'Describe your idea',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: textSecondary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _promptController,
-                      maxLines: 3,
-                      decoration: InputDecoration(
-                        hintText: 'e.g. A serene mountain at sunset, digital art',
-                        filled: true,
-                        fillColor: cardBg,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: border),
-                        ),
-                      ),
-                      onChanged: (_) => setState(() => _error = null),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Negative prompt (optional)',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: textSecondary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    TextField(
-                      controller: _negativePromptController,
-                      maxLines: 1,
-                      decoration: InputDecoration(
-                        hintText: 'e.g. blur, low quality',
-                        filled: true,
-                        fillColor: cardBg,
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: border),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Style',
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                            color: textSecondary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
-                    SizedBox(
-                      height: 48,
-                      child: DropdownButtonFormField<AIStyles>(
-                        value: _selectedStyle,
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: cardBg,
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(color: border),
-                          ),
-                        ),
-                        dropdownColor: cardBg,
-                        items: VisionCraftService.availableStyles.map((s) {
-                          return DropdownMenuItem(
-                            value: s,
-                            child: Text(
-                              _styleLabel(s),
-                              style: TextStyle(color: textPrimary),
-                            ),
-                          );
-                        }).toList(),
-                        onChanged: (s) => setState(() => _selectedStyle = s ?? AIStyles.abstract),
-                      ),
-                    ),
-                    if (_error != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        _error!,
-                        style: TextStyle(color: AppColors.error, fontSize: 13),
-                      ),
+                      const SizedBox(width: 44),
                     ],
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      height: 50,
-                      child: FilledButton.icon(
-                        onPressed: _loading || !_visionCraft.isConfigured ? null : _generate,
-                        icon: _loading
-                            ? const SizedBox(
-                                width: 22,
-                                height: 22,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                              )
-                            : const Icon(Icons.auto_awesome, size: 22),
-                        label: Text(_loading ? 'Generating…' : 'Generate image'),
-                        style: FilledButton.styleFrom(
-                          backgroundColor: AppColors.primaryPurple,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (_generatedImage != null) ...[
-                      const SizedBox(height: 24),
-                      Text(
-                        'Result',
-                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                              color: textSecondary,
-                              fontWeight: FontWeight.w600,
-                            ),
-                      ),
-                      const SizedBox(height: 8),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: Image.memory(
-                          _generatedImage!,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ],
-                  ],
+                  ),
                 ),
+
+                // 3. Main Artwork
+                Expanded(
+                  child: FadeInUp(
+                    duration: const Duration(milliseconds: 600),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(28),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.6),
+                              blurRadius: 40,
+                              offset: const Offset(0, 20),
+                            ),
+                            BoxShadow(
+                              color: AppColors.primaryPurple.withOpacity(0.25),
+                              blurRadius: 30,
+                              spreadRadius: -5,
+                            ),
+                          ],
+                          border: Border.all(
+                              color: Colors.white.withOpacity(0.2), width: 1.5),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(26),
+                          child: InteractiveViewer(
+                            child: Image.memory(widget.imageBytes,
+                                fit: BoxFit.cover),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // 4. ─── Pinterest-style "More Like This" ──────────────────
+                FadeInUp(
+                  delay: const Duration(milliseconds: 200),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Section header
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    AppColors.primaryPurple.withOpacity(0.3),
+                                    AppColors.primaryBlue.withOpacity(0.3),
+                                  ],
+                                ),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: const Icon(
+                                  Icons.auto_awesome_mosaic_rounded,
+                                  size: 14,
+                                  color: Colors.white70),
+                            ),
+                            const SizedBox(width: 10),
+                            const Text(
+                              'More Like This',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.3,
+                              ),
+                            ),
+                            const Spacer(),
+                            if (_loadingSimilar)
+                              const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white38),
+                              ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+
+                        // Similar artworks strip
+                        SizedBox(
+                          height: 120,
+                          child: _loadingSimilar
+                              ? _buildShimmer()
+                              : _similarArtworks.isEmpty && _similarLoaded
+                                  ? _buildEmptyHint()
+                                  : _buildSimilarStrip(),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // 5. Action Controls
+                FadeInUp(
+                  delay: const Duration(milliseconds: 400),
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 28),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: FilledButton.icon(
+                            onPressed: widget.onCreateAnother,
+                            icon: const Icon(Icons.add_photo_alternate_rounded,
+                                size: 20),
+                            label: const Text('Create Another',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15)),
+                            style: FilledButton.styleFrom(
+                              backgroundColor:
+                                  Colors.white.withOpacity(0.15),
+                              foregroundColor: Colors.white,
+                              padding:
+                                  const EdgeInsets.symmetric(vertical: 18),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              side: BorderSide(
+                                  color: Colors.white.withOpacity(0.3)),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        if (widget.artworkId != null)
+                          _VideoGenButton(artworkId: widget.artworkId!),
+                        const SizedBox(width: 12),
+                        Container(
+                          decoration: BoxDecoration(
+                            gradient: AppColors.primaryGradient,
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color:
+                                    AppColors.primaryPurple.withOpacity(0.4),
+                                blurRadius: 15,
+                                offset: const Offset(0, 5),
+                              ),
+                            ],
+                          ),
+                          child: Material(
+                            color: Colors.transparent,
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(20),
+                              splashColor: Colors.white.withOpacity(0.2),
+                              onTap: _isSaving ? null : _saveImage,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 24, vertical: 18),
+                                child: _isSaving
+                                    ? const SizedBox(
+                                        width: 22,
+                                        height: 22,
+                                        child: CircularProgressIndicator(
+                                          color: Colors.white,
+                                          strokeWidth: 2.5,
+                                        ),
+                                      )
+                                    : const Icon(Icons.download_rounded,
+                                        color: Colors.white),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Shimmer placeholders while loading ──────────────────────────────────
+  Widget _buildShimmer() {
+    return ListView.builder(
+      scrollDirection: Axis.horizontal,
+      itemCount: 3,
+      itemBuilder: (_, i) => Padding(
+        padding: EdgeInsets.only(right: i < 2 ? 10 : 0),
+        child: TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.2, end: 0.7),
+          duration: Duration(milliseconds: 700 + i * 200),
+          curve: Curves.easeInOut,
+          builder: (_, v, __) => Opacity(
+            opacity: v,
+            child: Container(
+              width: 100,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                color: Colors.white.withOpacity(0.12),
+                border: Border.all(color: Colors.white.withOpacity(0.1)),
+              ),
+              child: Center(
+                child: Icon(Icons.image_outlined,
+                    size: 28, color: Colors.white.withOpacity(0.2)),
               ),
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
-  static String _styleLabel(AIStyles s) {
-    final name = s.name;
-    if (name.isEmpty) return name;
-    final withSpaces = name.replaceAllMapped(
-      RegExp(r'([A-Z])'),
-      (m) => ' ${m.group(1)}',
+  // ── Empty hint when no similar found ───────────────────────────────────
+  Widget _buildEmptyHint() {
+    return Center(
+      child: Text(
+        'Generate more art to discover similar creations',
+        style: TextStyle(
+            color: Colors.white.withOpacity(0.4),
+            fontSize: 12,
+            fontStyle: FontStyle.italic),
+        textAlign: TextAlign.center,
+      ),
     );
-    return '${withSpaces[0].toUpperCase()}${withSpaces.substring(1).toLowerCase()}'.trim();
+  }
+
+  // ── Horizontal Pinterest strip ──────────────────────────────────────────
+  Widget _buildSimilarStrip() {
+    return ListView.builder(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      itemCount: _similarArtworks.length,
+      itemBuilder: (context, index) {
+        final art = _similarArtworks[index];
+        final imgProv = _imageProviderFor(art);
+        return Padding(
+          padding: EdgeInsets.only(
+              right: index < _similarArtworks.length - 1 ? 10 : 0),
+          child: GestureDetector(
+            onTap: () {
+              // Show details of this similar artwork
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (ctx) => _SimilarArtworkSheet(artwork: art),
+              );
+            },
+            child: Container(
+              width: 100,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: [
+                  BoxShadow(
+                      color: Colors.black.withOpacity(0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 6)),
+                ],
+                border: Border.all(color: Colors.white.withOpacity(0.15)),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  if (imgProv != null)
+                    Image(image: imgProv, fit: BoxFit.cover)
+                  else
+                    Container(color: Colors.white10),
+                  // Gradient + sparkle badge
+                  Positioned.fill(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.bottomCenter,
+                          end: const Alignment(0, -0.2),
+                          colors: [
+                            Colors.black.withOpacity(0.75),
+                            Colors.transparent
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    top: 6,
+                    right: 6,
+                    child: Container(
+                      padding: const EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: const Icon(Icons.auto_awesome,
+                          size: 10, color: Colors.white70),
+                    ),
+                  ),
+                  if (art.title != null)
+                    Positioned(
+                      bottom: 7,
+                      left: 7,
+                      right: 7,
+                      child: Text(
+                        art.title!,
+                        style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// A specialized button to handle video generation from an artwork.
+class _VideoGenButton extends StatefulWidget {
+  const _VideoGenButton({required this.artworkId});
+  final String artworkId;
+
+  @override
+  State<_VideoGenButton> createState() => _VideoGenButtonState();
+}
+
+class _VideoGenButtonState extends State<_VideoGenButton> {
+  bool _loading = false;
+
+  Future<void> _generateVideo() async {
+    setState(() => _loading = true);
+    try {
+      final videoUrl = await VisionCraftService().generateVideo(widget.artworkId);
+      if (videoUrl != null && mounted) {
+        // Here we could open a video player modal
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('✨ Video Generated! Playing now...'),
+            backgroundColor: AppColors.primaryBlue,
+            action: SnackBarAction(label: 'Open', onPressed: () => launchUrl(Uri.parse(videoUrl))),
+          ),
+        );
+        // Fallback for demo: launch URL
+        await launchUrl(Uri.parse(videoUrl));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('❌ Video error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: Colors.white.withOpacity(0.2)),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: _loading ? null : _generateVideo,
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: _loading
+                ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.movie_creation_rounded, color: Colors.white, size: 24),
+          ),
+        ),
+      ),
+    );
+  }
+}
+/// Lightweight sheet shown when the user taps a similar artwork thumbnail.
+/// Allows viewing the art full-size and discovering further similar images.
+class _SimilarArtworkSheet extends StatelessWidget {
+  const _SimilarArtworkSheet({required this.artwork});
+  final ArtworkModel artwork;
+
+  @override
+  Widget build(BuildContext context) {
+    final screenH = MediaQuery.of(context).size.height;
+    ImageProvider? imgProv;
+    if (artwork.imageUrl.startsWith('data:image')) {
+      imgProv = MemoryImage(base64Decode(artwork.imageUrl.split(',').last));
+    } else if (artwork.imageUrl.startsWith('http')) {
+      imgProv = NetworkImage(artwork.imageUrl);
+    }
+
+    return Container(
+      height: screenH * 0.75,
+      decoration: const BoxDecoration(
+        color: Color(0xFF0D0D1A),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        children: [
+          // Blurred background tint
+          if (imgProv != null)
+            Positioned.fill(
+              child: Opacity(
+                opacity: 0.15,
+                child: Image(image: imgProv, fit: BoxFit.cover),
+              ),
+            ),
+          if (imgProv != null)
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
+                child: Container(color: const Color(0xFF0D0D1A).withOpacity(0.88)),
+              ),
+            ),
+
+          Column(
+            children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 12, bottom: 16),
+                  width: 40,
+                  height: 5,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.25),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+
+              // Image
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: [
+                        BoxShadow(
+                            color: Colors.black.withOpacity(0.5),
+                            blurRadius: 30,
+                            offset: const Offset(0, 15)),
+                        BoxShadow(
+                            color: AppColors.primaryPurple.withOpacity(0.2),
+                            blurRadius: 20),
+                      ],
+                      border: Border.all(
+                          color: Colors.white.withOpacity(0.15), width: 1),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: imgProv != null
+                        ? InteractiveViewer(
+                            child: Image(
+                                image: imgProv,
+                                width: double.infinity,
+                                fit: BoxFit.cover))
+                        : Container(
+                            color: Colors.white10,
+                            child: const Center(
+                                child: Icon(Icons.image_outlined,
+                                    color: Colors.white24, size: 48))),
+                  ),
+                ),
+              ),
+
+              // Prompt + style info
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(colors: [
+                              AppColors.primaryPurple.withOpacity(0.3),
+                              AppColors.primaryBlue.withOpacity(0.3),
+                            ]),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.auto_awesome,
+                                  size: 12, color: Colors.white70),
+                              const SizedBox(width: 5),
+                              Text(
+                                artwork.title ?? 'Similar Art',
+                                style: const TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close_rounded,
+                              color: Colors.white54, size: 20),
+                          style: IconButton.styleFrom(
+                            backgroundColor: Colors.white.withOpacity(0.08),
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10)),
+                          ),
+                        )
+                      ],
+                    ),
+                    if (artwork.description != null) ...[
+                      const SizedBox(height: 12),
+                      Text(
+                        artwork.description!,
+                        style: TextStyle(
+                            color: Colors.white.withOpacity(0.6),
+                            fontSize: 13,
+                            height: 1.5),
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

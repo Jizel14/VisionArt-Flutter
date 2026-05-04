@@ -1,10 +1,10 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'widgets/smoke_background.dart';
-import 'widgets/animated_logo.dart';
-import 'widgets/particle_widget.dart';
-import 'widgets/animated_text.dart';
+import 'package:visionart_mobile/presentation/screens/splash/widgets/app_background_wrapper.dart';
+import 'package:visionart_mobile/presentation/screens/splash/widgets/animated_logo.dart';
+import 'package:visionart_mobile/presentation/screens/splash/widgets/particle_widget.dart';
+import 'package:visionart_mobile/presentation/screens/splash/widgets/animated_text.dart';
 
 /// Splash: logo appears small and zooms in (default or user signature), then particles, title, tagline, navigate.
 class SplashScreen extends StatefulWidget {
@@ -50,7 +50,7 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    return SmokeBackground(
+    return AppBackgroundWrapper(
       child: SafeArea(
         child: Stack(
           alignment: Alignment.center,

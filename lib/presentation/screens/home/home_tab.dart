@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:shimmer/shimmer.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import '../../../core/services/artwork_service.dart';
 import '../../../core/services/follow_service.dart';
 import '../../../core/services/notifications_service.dart';
 import '../../../core/models/artwork_model.dart';
 import '../../../core/models/user_model.dart';
 import '../../theme/theme_extensions.dart';
-import '../splash/widgets/smoke_background.dart';
+import 'package:visionart_mobile/presentation/screens/splash/widgets/app_background_wrapper.dart';
 import 'notifications_screen.dart';
 import '../profile/artwork_detail_screen.dart';
 import 'saved_collections_screen.dart';
@@ -39,7 +40,11 @@ class _HomeTabState extends State<HomeTab> {
   late ScrollController _scrollController;
 
   List<ArtworkModel> _artworks = [];
+  List<ArtworkModel> _recentArtworks = [];
+  List<ArtworkModel> _similarArtworks = [];
+  
   bool _isLoadingFeed = false;
+  bool _isLoadingTopSections = false;
   bool _hasMore = true;
   int _currentPage = 1;
   int _unreadNotificationsCount = 0;
@@ -52,8 +57,27 @@ class _HomeTabState extends State<HomeTab> {
     _notificationsService = NotificationsService();
     _scrollController = ScrollController();
     _scrollController.addListener(_onScroll);
+    _loadTopSections();
     _loadFeed();
     _loadUnreadNotifications();
+  }
+
+  Future<void> _loadTopSections() async {
+    setState(() => _isLoadingTopSections = true);
+    try {
+      final recentRes = await _artworkService.getPublicFeed(page: 1, limit: 10, sort: 'recent');
+      final exploreRes = await _artworkService.getExplore(page: 1, limit: 10, filter: 'trending');
+      if (mounted) {
+        setState(() {
+          _recentArtworks = recentRes.data;
+          _similarArtworks = exploreRes.data;
+          _isLoadingTopSections = false;
+        });
+      }
+    } catch (e) {
+      print('Error loading top sections: $e');
+      if (mounted) setState(() => _isLoadingTopSections = false);
+    }
   }
 
   @override
@@ -87,7 +111,8 @@ class _HomeTabState extends State<HomeTab> {
         _hasMore = _currentPage < result.totalPages;
         _currentPage++;
       });
-    } catch (_) {
+    } catch (e) {
+      print('Error loading feed: $e');
       setState(() => _isLoadingFeed = false);
     }
   }
@@ -98,6 +123,7 @@ class _HomeTabState extends State<HomeTab> {
       _currentPage = 1;
       _hasMore = true;
     });
+    _loadTopSections();
     await _loadFeed();
   }
 
@@ -279,7 +305,7 @@ class _HomeTabState extends State<HomeTab> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: context.cardBackgroundColor,
+      backgroundColor: AppThemeColors.cardBackgroundColor(context),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
@@ -417,7 +443,7 @@ class _HomeTabState extends State<HomeTab> {
                   Text(
                     'Comments',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: context.textPrimaryColor,
+                      color: AppThemeColors.textPrimaryColor(context),
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -431,7 +457,7 @@ class _HomeTabState extends State<HomeTab> {
                             child: Text(
                               'No comments yet',
                               style: TextStyle(
-                                color: context.textSecondaryColor,
+                                color: AppThemeColors.textSecondaryColor(context),
                               ),
                             ),
                           )
@@ -474,7 +500,7 @@ class _HomeTabState extends State<HomeTab> {
                                             Text(
                                               comment.userName,
                                               style: TextStyle(
-                                                color: context.textPrimaryColor,
+                                                color: AppThemeColors.textPrimaryColor(context),
                                                 fontWeight: FontWeight.w600,
                                               ),
                                             ),
@@ -483,7 +509,7 @@ class _HomeTabState extends State<HomeTab> {
                                               comment.content,
                                               style: TextStyle(
                                                 color:
-                                                    context.textSecondaryColor,
+                                                    AppThemeColors.textSecondaryColor(context),
                                               ),
                                             ),
                                             const SizedBox(height: 4),
@@ -572,8 +598,7 @@ class _HomeTabState extends State<HomeTab> {
                                                       Text(
                                                         reply.userName,
                                                         style: TextStyle(
-                                                          color: context
-                                                              .textPrimaryColor,
+                                                          color: AppThemeColors.textPrimaryColor(context),
                                                           fontSize: 12,
                                                           fontWeight:
                                                               FontWeight.w600,
@@ -583,8 +608,7 @@ class _HomeTabState extends State<HomeTab> {
                                                       Text(
                                                         reply.content,
                                                         style: TextStyle(
-                                                          color: context
-                                                              .textSecondaryColor,
+                                                          color: AppThemeColors.textSecondaryColor(context),
                                                           fontSize: 12,
                                                         ),
                                                       ),
@@ -613,7 +637,7 @@ class _HomeTabState extends State<HomeTab> {
                         vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: context.surfaceColor.withOpacity(0.35),
+                        color: AppThemeColors.surfaceColor(context).withOpacity(0.35),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Row(
@@ -622,7 +646,7 @@ class _HomeTabState extends State<HomeTab> {
                             child: Text(
                               'Replying to ${replyingTo!.userName}',
                               style: TextStyle(
-                                color: context.textSecondaryColor,
+                                color: AppThemeColors.textSecondaryColor(context),
                                 fontSize: 12,
                               ),
                             ),
@@ -655,10 +679,10 @@ class _HomeTabState extends State<HomeTab> {
                       constraints: const BoxConstraints(maxHeight: 150),
                       margin: const EdgeInsets.only(bottom: 8),
                       decoration: BoxDecoration(
-                        color: context.surfaceColor.withOpacity(0.45),
+                        color: AppThemeColors.surfaceColor(context).withOpacity(0.45),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                          color: context.borderColor.withOpacity(0.4),
+                          color: AppThemeColors.borderColor(context).withOpacity(0.4),
                         ),
                       ),
                       child: ListView.separated(
@@ -666,7 +690,7 @@ class _HomeTabState extends State<HomeTab> {
                         itemCount: mentionSuggestions.length,
                         separatorBuilder: (_, __) => Divider(
                           height: 1,
-                          color: context.borderColor.withOpacity(0.3),
+                          color: AppThemeColors.borderColor(context).withOpacity(0.3),
                         ),
                         itemBuilder: (_, index) {
                           final user = mentionSuggestions[index];
@@ -689,7 +713,7 @@ class _HomeTabState extends State<HomeTab> {
                             title: Text(
                               user.name,
                               style: TextStyle(
-                                color: context.textPrimaryColor,
+                                color: AppThemeColors.textPrimaryColor(context),
                                 fontSize: 13,
                               ),
                             ),
@@ -706,16 +730,16 @@ class _HomeTabState extends State<HomeTab> {
                           onChanged: (value) {
                             loadMentionSuggestions(value, setSheetState);
                           },
-                          style: TextStyle(color: context.textPrimaryColor),
+                          style: TextStyle(color: AppThemeColors.textPrimaryColor(context)),
                           decoration: InputDecoration(
                             hintText: replyingTo != null
                                 ? 'Write a reply...'
                                 : 'Write a comment...',
                             hintStyle: TextStyle(
-                              color: context.textSecondaryColor,
+                              color: AppThemeColors.textSecondaryColor(context),
                             ),
                             filled: true,
-                            fillColor: context.surfaceColor.withOpacity(0.4),
+                            fillColor: AppThemeColors.surfaceColor(context).withOpacity(0.4),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide.none,
@@ -834,7 +858,7 @@ class _HomeTabState extends State<HomeTab> {
     await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: context.cardBackgroundColor,
+      backgroundColor: AppThemeColors.cardBackgroundColor(context),
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
@@ -855,7 +879,7 @@ class _HomeTabState extends State<HomeTab> {
                   Text(
                     'Report Artwork',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: context.textPrimaryColor,
+                      color: AppThemeColors.textPrimaryColor(context),
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -864,7 +888,7 @@ class _HomeTabState extends State<HomeTab> {
                     value: selectedReason,
                     decoration: InputDecoration(
                       filled: true,
-                      fillColor: context.surfaceColor.withOpacity(0.4),
+                      fillColor: AppThemeColors.surfaceColor(context).withOpacity(0.4),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -889,12 +913,12 @@ class _HomeTabState extends State<HomeTab> {
                     controller: detailsCtrl,
                     minLines: 3,
                     maxLines: 4,
-                    style: TextStyle(color: context.textPrimaryColor),
+                    style: TextStyle(color: AppThemeColors.textPrimaryColor(context)),
                     decoration: InputDecoration(
                       hintText: 'Optional details...',
-                      hintStyle: TextStyle(color: context.textSecondaryColor),
+                      hintStyle: TextStyle(color: AppThemeColors.textSecondaryColor(context)),
                       filled: true,
-                      fillColor: context.surfaceColor.withOpacity(0.4),
+                      fillColor: AppThemeColors.surfaceColor(context).withOpacity(0.4),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
@@ -963,10 +987,10 @@ class _HomeTabState extends State<HomeTab> {
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = context.textPrimaryColor;
-    final textSecondary = context.textSecondaryColor;
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
 
-    return SmokeBackground(
+    return AppBackgroundWrapper(
       child: SafeArea(
         child: widget.isLoading
             ? _buildShimmer(context)
@@ -1035,7 +1059,7 @@ class _HomeTabState extends State<HomeTab> {
                           IconButton(
                             onPressed: widget.onToggleTheme,
                             icon: Icon(
-                              context.isDark
+                              Theme.of(context).brightness == Brightness.dark
                                   ? Icons.light_mode_rounded
                                   : Icons.dark_mode_rounded,
                               color: textPrimary,
@@ -1045,6 +1069,104 @@ class _HomeTabState extends State<HomeTab> {
                       ),
                     ),
                   ),
+                  // Top Horizontal Section: Recent Realizations
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                      child: Text(
+                        'Recent Realizations',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: textPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_isLoadingTopSections)
+                    SliverToBoxAdapter(child: const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator())))
+                  else if (_recentArtworks.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: SizedBox(
+                        height: 200,
+                        child: ListView.builder(
+                          physics: const BouncingScrollPhysics(),
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: _recentArtworks.length,
+                          itemBuilder: (context, index) {
+                            final art = _recentArtworks[index];
+                            return _buildHorizontalCard(art, context);
+                          },
+                        ),
+                      ),
+                    )
+                  else
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        child: Text(
+                          'No recent artworks found',
+                          style: TextStyle(color: textSecondary),
+                        ),
+                      ),
+                    ),
+                  
+                  // Top Horizontal Section: Similar
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+                      child: Text(
+                        'Similar Discoveries',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: textPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (_isLoadingTopSections)
+                    SliverToBoxAdapter(child: const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator())))
+                  else if (_similarArtworks.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: SizedBox(
+                        height: 200,
+                        child: ListView.builder(
+                          physics: const BouncingScrollPhysics(),
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          itemCount: _similarArtworks.length,
+                          itemBuilder: (context, index) {
+                            final art = _similarArtworks[index];
+                            return _buildHorizontalCard(art, context);
+                          },
+                        ),
+                      ),
+                    )
+                  else
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        child: Text(
+                          'No similar discoveries found',
+                          style: TextStyle(color: textSecondary),
+                        ),
+                      ),
+                    ),
+                  
+                  // Main Pinterest Grid: All Images
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(24, 32, 24, 16),
+                      child: Text(
+                        'All Inspirations',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: textPrimary,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                  ),
+
                   if (_artworks.isEmpty && !_isLoadingFeed)
                     SliverToBoxAdapter(
                       child: Padding(
@@ -1067,81 +1189,75 @@ class _HomeTabState extends State<HomeTab> {
                     )
                   else
                     SliverPadding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      sliver: AnimationLimiter(
-                        child: SliverList(
-                          delegate: SliverChildBuilderDelegate(
-                            (context, index) {
-                              if (index >= _artworks.length) {
-                                return _isLoadingFeed
-                                    ? const Padding(
-                                        padding: EdgeInsets.all(24),
-                                        child: Center(
-                                          child: CircularProgressIndicator(),
-                                        ),
-                                      )
-                                    : const SizedBox();
-                              }
-
-                              final artwork = _artworks[index];
-                              final isOwnPost =
-                                  widget.currentUser != null &&
-                                  widget.currentUser!.id == artwork.user.id;
-
-                              return AnimationConfiguration.staggeredList(
-                                position: index,
-                                duration: const Duration(milliseconds: 400),
-                                child: SlideAnimation(
-                                  verticalOffset: 30,
-                                  child: FadeInAnimation(
-                                    child: Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 20,
-                                      ),
-                                      child: _FeedCard(
-                                        artwork: artwork,
-                                        isOwnPost: isOwnPost,
-                                        textPrimary: textPrimary,
-                                        textSecondary: textSecondary,
-                                        onTapAuthor: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) =>
-                                                  ProfileInspectScreen(
-                                                    userId: artwork.user.id,
-                                                    initialUser: artwork.user,
-                                                  ),
-                                            ),
-                                          );
-                                        },
-                                        onTapCard: () {
-                                          Navigator.push(
-                                            context,
-                                            MaterialPageRoute(
-                                              builder: (_) =>
-                                                  ArtworkDetailScreen(
-                                                    artwork: artwork,
-                                                  ),
-                                            ),
-                                          );
-                                        },
-                                        onTapFollow: () => _toggleFollow(index),
-                                        onTapLike: () => _toggleLike(index),
-                                        onTapSave: () => _toggleSave(index),
-                                        onTapComments: () =>
-                                            _openComments(index),
-                                        onTapReport: () => _openReport(index),
-                                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      sliver: SliverMasonryGrid.count(
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 12,
+                        childCount: _artworks.length + (_isLoadingFeed ? 1 : 0),
+                        itemBuilder: (context, index) {
+                          if (index >= _artworks.length) {
+                            return _isLoadingFeed
+                                ? const Padding(
+                                    padding: EdgeInsets.all(24),
+                                    child: Center(
+                                      child: CircularProgressIndicator(),
                                     ),
-                                  ),
+                                  )
+                                : const SizedBox();
+                          }
+
+                          final artwork = _artworks[index];
+                          final isOwnPost =
+                              widget.currentUser != null &&
+                              widget.currentUser!.id == artwork.user.id;
+
+                          return AnimationConfiguration.staggeredGrid(
+                            position: index,
+                            duration: const Duration(milliseconds: 400),
+                            columnCount: 2,
+                            child: SlideAnimation(
+                              verticalOffset: 30,
+                              child: FadeInAnimation(
+                                child: _FeedCard(
+                                  artwork: artwork,
+                                  isOwnPost: isOwnPost,
+                                  textPrimary: textPrimary,
+                                  textSecondary: textSecondary,
+                                  onTapAuthor: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            ProfileInspectScreen(
+                                              userId: artwork.user.id,
+                                              initialUser: artwork.user,
+                                            ),
+                                      ),
+                                    );
+                                  },
+                                  onTapCard: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) =>
+                                            ArtworkDetailScreen(
+                                              artwork: artwork,
+                                            ),
+                                      ),
+                                    );
+                                  },
+                                  onTapFollow: () => _toggleFollow(index),
+                                  onTapLike: () => _toggleLike(index),
+                                  onTapSave: () => _toggleSave(index),
+                                  onTapComments: () =>
+                                      _openComments(index),
+                                  onTapReport: () => _openReport(index),
                                 ),
-                              );
-                            },
-                            childCount:
-                                _artworks.length + (_isLoadingFeed ? 1 : 0),
-                          ),
-                        ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                   const SliverToBoxAdapter(child: SizedBox(height: 100)),
@@ -1151,9 +1267,67 @@ class _HomeTabState extends State<HomeTab> {
     );
   }
 
+  Widget _buildHorizontalCard(ArtworkModel art, BuildContext context) {
+    return GestureDetector(
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ArtworkDetailScreen(artwork: art),
+          ),
+        );
+      },
+      child: Container(
+        width: 140,
+        margin: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          color: AppThemeColors.cardBackgroundColor(context),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              CachedNetworkImage(
+                imageUrl: art.imageUrl,
+                fit: BoxFit.cover,
+              ),
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [Colors.black87, Colors.transparent],
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                    ),
+                  ),
+                  child: Text(
+                    art.title ?? art.user.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildShimmer(BuildContext context) {
-    final border = context.borderColor;
-    final secondary = context.textSecondaryColor;
+    final border = AppThemeColors.borderColor(context);
+    final secondary = AppThemeColors.textSecondaryColor(context);
 
     return Padding(
       padding: const EdgeInsets.all(24),
@@ -1216,7 +1390,7 @@ class _FeedCardState extends State<_FeedCard> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: context.cardBackgroundColor,
+          color: AppThemeColors.cardBackgroundColor(context),
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
@@ -1376,7 +1550,7 @@ class _FooterAction extends StatelessWidget {
             Text(
               label,
               style: TextStyle(
-                color: context.textSecondaryColor,
+                color: AppThemeColors.textSecondaryColor(context),
                 fontWeight: FontWeight.w600,
               ),
             ),

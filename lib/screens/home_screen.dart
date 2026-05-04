@@ -6,6 +6,7 @@ import '../presentation/theme/app_colors.dart';
 import '../presentation/theme/theme_extensions.dart';
 import '../presentation/screens/home/home_tab.dart';
 import '../presentation/screens/create/create_art_screen.dart';
+import '../presentation/screens/gallery/gallery_screen.dart';
 import '../presentation/screens/marketplace/marketplace_screen.dart';
 import '../presentation/screens/profile/profile_screen.dart';
 
@@ -93,7 +94,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     if (_error != null) {
       return Scaffold(
-        backgroundColor: context.surfaceColor,
+        backgroundColor: AppThemeColors.surfaceColor(context),
         body: Center(
           child: Text(_error!, style: TextStyle(color: AppColors.error)),
         ),
@@ -111,6 +112,7 @@ class _HomeScreenState extends State<HomeScreen> {
             onToggleTheme: widget.onToggleTheme,
           ),
           const CreateArtScreen(),
+          GalleryScreen(userId: _user?['id'] ?? ''),
           MarketplaceScreen(authService: widget.authService),
           ProfileScreen(
             authService: widget.authService,
@@ -154,9 +156,9 @@ class _ThemedBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: context.surfaceColor,
+        color: AppThemeColors.surfaceColor(context),
         border: Border(
-          top: BorderSide(color: context.borderColor.withOpacity(0.5)),
+          top: BorderSide(color: AppThemeColors.borderColor(context).withOpacity(0.5)),
         ),
       ),
       child: SafeArea(
@@ -175,16 +177,22 @@ class _ThemedBottomNav extends StatelessWidget {
               onTap: () => onTap(1),
             ),
             _NavItem(
-              icon: Icons.storefront_rounded,
-              label: 'Market',
+              icon: Icons.photo_library_rounded,
+              label: 'Gallery',
               isSelected: currentIndex == 2,
               onTap: () => onTap(2),
             ),
             _NavItem(
-              icon: Icons.person_rounded,
-              label: 'Profile',
+              icon: Icons.storefront_rounded,
+              label: 'Market',
               isSelected: currentIndex == 3,
               onTap: () => onTap(3),
+            ),
+            _NavItem(
+              icon: Icons.person_rounded,
+              label: 'Profile',
+              isSelected: currentIndex == 4,
+              onTap: () => onTap(4),
             ),
           ],
         ),
@@ -208,7 +216,9 @@ class _NavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final secondaryColor = context.textSecondaryColor;
+    final secondaryColor = AppThemeColors.textSecondaryColor(context);
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Expanded(
       child: InkWell(

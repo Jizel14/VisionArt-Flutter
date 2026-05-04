@@ -79,11 +79,18 @@ class ArtworkService {
     required String userId,
     int page = 1,
     int limit = 20,
+    String? search,
+    String? filter,
   }) async {
     try {
       final response = await _dio.get(
         '/social/artworks/user/$userId',
-        queryParameters: {'page': page, 'limit': limit},
+        queryParameters: {
+          'page': page, 
+          'limit': limit,
+          if (search != null && search.isNotEmpty) 'q': search,
+          if (filter != null && filter.isNotEmpty) 'filter': filter,
+        },
       );
       return PaginatedArtworks.fromJson(response.data);
     } catch (e) {
@@ -95,11 +102,18 @@ class ArtworkService {
   Future<PaginatedArtworks> getMyArtworks({
     int page = 1,
     int limit = 20,
+    String? search,
+    String? filter,
   }) async {
     try {
       final response = await _dio.get(
         '/social/artworks/me/all',
-        queryParameters: {'page': page, 'limit': limit},
+        queryParameters: {
+          'page': page, 
+          'limit': limit,
+          if (search != null && search.isNotEmpty) 'q': search,
+          if (filter != null && filter.isNotEmpty) 'filter': filter,
+        },
       );
       return PaginatedArtworks.fromJson(response.data);
     } catch (e) {
@@ -267,6 +281,32 @@ class ArtworkService {
     );
 
     return PaginatedArtworks.fromJson(response.data as Map<String, dynamic>);
+  }
+
+  /// Get similar artworks for a given artwork (Pinterest-style discovery).
+  /// The backend first searches the DB; if fewer than [limit] are found it
+  /// AI-generates the remainder so the caller always gets at least [limit] items.
+  Future<List<ArtworkModel>> getSimilarArtworks(
+    String artworkId, {
+    int limit = 3,
+    bool generate = true,
+  }) async {
+    try {
+      final response = await _dio.get(
+        '/social/artworks/$artworkId/similar',
+        queryParameters: {
+          'limit': limit,
+          'generate': generate.toString(),
+        },
+      );
+      final payload = response.data as Map<String, dynamic>;
+      final list = payload['data'] as List<dynamic>? ?? [];
+      return list
+          .map((e) => ArtworkModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return [];
+    }
   }
 
   int _toInt(dynamic value) {

@@ -79,8 +79,8 @@ class _ArtDetailScreenState extends State<ArtDetailScreen>
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = context.textPrimaryColor;
-    final textSecondary = context.textSecondaryColor;
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -107,7 +107,7 @@ class _ArtDetailScreenState extends State<ArtDetailScreen>
                           maxHeight: MediaQuery.of(context).size.height * 0.82,
                         ),
                         decoration: BoxDecoration(
-                          color: context.cardBackgroundColor.withOpacity(0.92),
+                          color: AppThemeColors.cardBackgroundColor(context).withOpacity(0.92),
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
                             color: AppColors.chainCyan.withOpacity(0.35),

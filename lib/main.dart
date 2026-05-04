@@ -2,16 +2,16 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'core/api_client.dart';
-import 'core/auth_service.dart';
-import 'core/app_config.dart';
-import 'core/signature_storage.dart';
-import 'core/preferences_service.dart';
-import 'presentation/theme/app_theme.dart';
-import 'presentation/screens/splash/splash_screen.dart';
-import 'presentation/screens/auth/auth_screen.dart';
-import 'presentation/screens/preferences/preferences_screen.dart';
-import 'screens/home_screen.dart';
+import 'package:visionart_mobile/core/api_client.dart';
+import 'package:visionart_mobile/core/auth_service.dart';
+import 'package:visionart_mobile/core/app_config.dart';
+import 'package:visionart_mobile/core/signature_storage.dart';
+import 'package:visionart_mobile/core/preferences_service.dart';
+import 'package:visionart_mobile/presentation/theme/app_theme.dart';
+import 'package:visionart_mobile/presentation/screens/splash/splash_screen.dart';
+import 'package:visionart_mobile/presentation/screens/auth/auth_screen.dart';
+import 'package:visionart_mobile/presentation/screens/preferences/preferences_screen.dart';
+import 'package:visionart_mobile/screens/home_screen.dart';
 
 const String _keyThemeMode = 'theme_mode';
 

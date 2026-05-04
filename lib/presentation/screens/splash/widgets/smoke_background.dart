@@ -1,59 +1,97 @@
 import 'package:flutter/material.dart';
-import 'package:zhi_starry_sky/starry_sky.dart';
-import '../../../theme/app_colors.dart';
+import 'dart:math';
 
-/// Full-screen background using [zhi_starry_sky] starry sky animation.
-/// Respects light/dark mode via [Theme.brightness] and adds a brand gradient overlay.
-/// See: https://pub.dev/packages/zhi_starry_sky
-class SmokeBackground extends StatelessWidget {
-  const SmokeBackground({
-    super.key,
-    required this.child,
-    this.useGradientOverlay = true,
-  });
+class SmokeBackground extends StatefulWidget {
+  final Widget? child;
+  const SmokeBackground({super.key, this.child});
 
-  final Widget child;
+  @override
+  State<SmokeBackground> createState() => _SmokeBackgroundState();
+}
 
-  /// When true, applies a purple/blue gradient overlay (dark) or subtle tint (light) to match app theme.
-  final bool useGradientOverlay;
+class _SmokeBackgroundState extends State<SmokeBackground> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  final List<SmokeParticle> _particles = [];
+  final Random _random = Random();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 10),
+    )..addListener(() {
+        setState(() {
+          for (var p in _particles) {
+            p.update();
+          }
+        });
+      })..repeat();
+
+    for (int i = 0; i < 20; i++) {
+        _particles.add(SmokeParticle(_random));
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return RepaintBoundary(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Starry sky (uses Theme.brightness: dark = black + white stars, light = white + black stars)
-          const Positioned.fill(
-            child: StarrySkyView(),
-          ),
-          // Brand gradient overlay: purple/blue in dark, very subtle in light
-          if (useGradientOverlay)
-            Positioned.fill(
-              child: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: isDark
-                        ? [
-                            AppColors.primaryPurple.withOpacity(0.45),
-                            AppColors.primaryBlue.withOpacity(0.35),
-                            AppColors.darkPurple.withOpacity(0.5),
-                          ]
-                        : [
-                            AppColors.lightBlue.withOpacity(0.08),
-                            AppColors.primaryPurple.withOpacity(0.05),
-                          ],
-                  ),
-                ),
-              ),
-            ),
-          child,
-        ],
-      ),
+    return Stack(
+      children: [
+        CustomPaint(
+          painter: SmokePainter(_particles),
+          child: Container(),
+        ),
+        if (widget.child != null) widget.child!,
+      ],
     );
   }
+}
+
+class SmokeParticle {
+  late double x, y, size, opacity, speedX, speedY;
+  final Random random;
+
+  SmokeParticle(this.random) {
+    reset();
+  }
+
+  void reset() {
+    x = random.nextDouble() * 400;
+    y = random.nextDouble() * 800;
+    size = random.nextDouble() * 150 + 50;
+    opacity = random.nextDouble() * 0.1 + 0.05;
+    speedX = (random.nextDouble() - 0.5) * 0.5;
+    speedY = (random.nextDouble() - 0.5) * 0.5;
+  }
+
+  void update() {
+    x += speedX;
+    y += speedY;
+    if (x < -100 || x > 500 || y < -100 || y > 900) {
+      reset();
+    }
+  }
+}
+
+class SmokePainter extends CustomPainter {
+  final List<SmokeParticle> particles;
+  SmokePainter(this.particles);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 50);
+    for (var p in particles) {
+      paint.color = Colors.blueGrey.withOpacity(p.opacity);
+      canvas.drawCircle(Offset(p.x, p.y), p.size, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

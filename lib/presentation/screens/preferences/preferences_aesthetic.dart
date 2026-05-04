@@ -210,7 +210,7 @@ class _PreferencesAestheticState extends State<PreferencesAesthetic> {
               style: TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: context.textPrimaryColor,
+                color: AppThemeColors.textPrimaryColor(context),
               ),
             ),
           ),
@@ -236,13 +236,13 @@ class _PreferencesAestheticState extends State<PreferencesAesthetic> {
           backgroundColor: Colors.transparent,
           selectedColor: AppColors.primaryPurple.withOpacity(0.3),
           side: BorderSide(
-            color: isSelected ? AppColors.primaryPurple : context.borderColor,
+            color: isSelected ? AppColors.primaryPurple : AppThemeColors.borderColor(context),
             width: isSelected ? 2 : 1,
           ),
           labelStyle: TextStyle(
             color: isSelected
                 ? AppColors.primaryPurple
-                : context.textPrimaryColor,
+                : AppThemeColors.textPrimaryColor(context),
             fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
           ),
         );
@@ -259,7 +259,7 @@ class _PreferencesAestheticState extends State<PreferencesAesthetic> {
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: context.borderColor),
+        border: Border.all(color: AppThemeColors.borderColor(context)),
       ),
       padding: const EdgeInsets.symmetric(horizontal: 12),
       child: DropdownButton<String>(
@@ -269,7 +269,7 @@ class _PreferencesAestheticState extends State<PreferencesAesthetic> {
         underline: const SizedBox(),
         hint: Text(
           hintText,
-          style: TextStyle(color: context.textSecondaryColor),
+          style: TextStyle(color: AppThemeColors.textSecondaryColor(context)),
         ),
         items: [
           ...options.map(

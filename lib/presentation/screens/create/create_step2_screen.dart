@@ -2,7 +2,7 @@ import 'package:animate_do/animate_do.dart';
 import 'package:flutter/material.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
-import '../splash/widgets/smoke_background.dart';
+import 'package:visionart_mobile/presentation/screens/splash/widgets/app_background_wrapper.dart';
 import 'art_creation_model.dart';
 
 /// Step 2: Visual style picker, aspect ratio, quality, then Generate.
@@ -30,6 +30,7 @@ class _CreateStep2ScreenState extends State<CreateStep2Screen> {
   VisualStyleOption? _selectedStyle;
   ArtAspectRatio _aspectRatio = ArtAspectRatio.square;
   int _quality = 3;
+  bool _generateSimilar = false;
 
   @override
   void initState() {
@@ -37,24 +38,26 @@ class _CreateStep2ScreenState extends State<CreateStep2Screen> {
     _selectedStyle = widget.config.selectedVisualStyle ?? kVisualStyles.first;
     _aspectRatio = widget.config.aspectRatio;
     _quality = widget.config.quality;
+    _generateSimilar = widget.config.generateSimilar;
   }
 
   void _onGenerate() {
     final config = widget.config
       ..selectedVisualStyle = _selectedStyle
       ..aspectRatio = _aspectRatio
-      ..quality = _quality;
+      ..quality = _quality
+      ..generateSimilar = _generateSimilar;
     widget.onGenerate(config);
   }
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = context.textPrimaryColor;
-    final textSecondary = context.textSecondaryColor;
-    final cardBg = context.cardBackgroundColor;
-    final borderCol = context.borderColor;
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
+    final cardBg = AppThemeColors.cardBackgroundColor(context);
+    final borderCol = AppThemeColors.borderColor(context);
 
-    return SmokeBackground(
+    return AppBackgroundWrapper(
       child: SafeArea(
         child: Column(
           children: [
@@ -313,6 +316,36 @@ class _CreateStep2ScreenState extends State<CreateStep2Screen> {
                     ),
                     Center(
                       child: _QualityBadge(quality: _quality, textPrimary: textPrimary),
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // ── Similar Generations Toggle ───────────────
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: cardBg,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: borderCol),
+                      ),
+                      child: SwitchListTile(
+                        value: _generateSimilar,
+                        onChanged: (v) => setState(() => _generateSimilar = v),
+                        title: Text(
+                          'Generate Similar Images',
+                          style: TextStyle(
+                            color: textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: Text(
+                          'Automatically find or create 3 similar variations',
+                          style: TextStyle(color: textSecondary, fontSize: 11),
+                        ),
+                        activeColor: AppColors.primaryPurple,
+                        contentPadding: EdgeInsets.zero,
+                      ),
                     ),
 
                     const SizedBox(height: 24),

@@ -5,7 +5,7 @@ import '../../../core/preference_storage.dart';
 import '../../../core/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
-import '../splash/widgets/smoke_background.dart';
+import 'package:visionart_mobile/presentation/screens/splash/widgets/app_background_wrapper.dart';
 
 /// Single screen that changes content for each step (1-6 + summary).
 /// Saves to SharedPreferences and syncs to backend on complete.
@@ -201,12 +201,12 @@ class _PreferencesOnboardingScreenState
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = context.textPrimaryColor;
-    final textSecondary = context.textSecondaryColor;
-    final borderColor = context.borderColor;
-    final cardBg = context.cardBackgroundColor;
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
+    final borderColor = AppThemeColors.borderColor(context);
+    final cardBg = AppThemeColors.cardBackgroundColor(context);
     return Scaffold(
-      body: SmokeBackground(
+      body: AppBackgroundWrapper(
         child: SafeArea(
           child: Column(
             children: [
@@ -625,7 +625,7 @@ class _PreferencesOnboardingScreenState
     Color textPrimary,
     Color textSecondary,
   ) {
-    final cardBg = context.cardBackgroundColor;
+    final cardBg = AppThemeColors.cardBackgroundColor(context);
     return FadeIn(
       key: const ValueKey(5),
       child: SingleChildScrollView(

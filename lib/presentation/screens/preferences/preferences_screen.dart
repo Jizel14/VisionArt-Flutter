@@ -4,7 +4,7 @@ import '../../../core/preferences_service.dart';
 import '../../../core/models/user_preferences.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
-import '../splash/widgets/smoke_background.dart';
+import 'package:visionart_mobile/presentation/screens/splash/widgets/app_background_wrapper.dart';
 import 'preferences_aesthetic.dart';
 import 'preferences_context.dart';
 import 'preferences_privacy.dart';
@@ -111,7 +111,7 @@ class _PreferencesScreenState extends State<PreferencesScreen>
       return _buildErrorScreen(context);
     }
 
-    return SmokeBackground(
+    return AppBackgroundWrapper(
       child: Scaffold(
         backgroundColor: Colors.transparent,
         appBar: AppBar(
@@ -123,7 +123,7 @@ class _PreferencesScreenState extends State<PreferencesScreen>
             controller: _tabController,
             isScrollable: true,
             labelColor: AppColors.primaryPurple,
-            unselectedLabelColor: context.textSecondaryColor,
+            unselectedLabelColor: AppThemeColors.textSecondaryColor(context),
             indicatorColor: AppColors.primaryPurple,
             tabs: const [
               Tab(icon: Icon(Icons.brush_rounded), text: 'Aesthetic'),
@@ -191,7 +191,7 @@ class _PreferencesScreenState extends State<PreferencesScreen>
 
   Widget _buildLoadingScreen(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.surfaceColor,
+      backgroundColor: AppThemeColors.surfaceColor(context),
       appBar: AppBar(
         title: const Text('Preferences'),
         backgroundColor: Colors.transparent,
@@ -205,7 +205,7 @@ class _PreferencesScreenState extends State<PreferencesScreen>
 
   Widget _buildErrorScreen(BuildContext context) {
     return Scaffold(
-      backgroundColor: context.surfaceColor,
+      backgroundColor: AppThemeColors.surfaceColor(context),
       appBar: AppBar(
         title: const Text('Preferences'),
         backgroundColor: Colors.transparent,

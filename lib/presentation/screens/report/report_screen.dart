@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/auth_service.dart';
 import '../../theme/app_colors.dart';
 import '../../theme/theme_extensions.dart';
-import '../splash/widgets/smoke_background.dart';
+import 'package:visionart_mobile/presentation/screens/splash/widgets/app_background_wrapper.dart';
 
 /// Types of reports available.
 enum ReportCategory {
@@ -121,10 +121,10 @@ class _ReportScreenState extends State<ReportScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = context.textPrimaryColor;
-    final textSecondary = context.textSecondaryColor;
-    final cardBg = context.cardBackgroundColor;
-    final border = context.borderColor;
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
+    final cardBg = AppThemeColors.cardBackgroundColor(context);
+    final border = AppThemeColors.borderColor(context);
 
     return Scaffold(
       extendBodyBehindAppBar: true,
@@ -145,7 +145,7 @@ class _ReportScreenState extends State<ReportScreen> {
         ),
         centerTitle: true,
       ),
-      body: SmokeBackground(
+      body: AppBackgroundWrapper(
         child: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
@@ -429,10 +429,10 @@ class _GlassContainer extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
-            color: context.cardBackgroundColor,
+            color: AppThemeColors.cardBackgroundColor(context),
             borderRadius: BorderRadius.circular(12),
             border: Border.all(
-              color: context.borderColor.withOpacity(0.5),
+              color: AppThemeColors.borderColor(context).withOpacity(0.5),
             ),
           ),
           child: child,

@@ -19,8 +19,8 @@ class PreferencesService {
   /// Auto-creates defaults if not yet configured
   Future<UserPreferences> getPreferences() async {
     try {
-      final res = await _dio.get('/user-preferences/me');
-      final prefs = UserPreferences.fromJson(res.data);
+      final res = await _dio.get('/auth/me');
+      final prefs = UserPreferences.fromJson(res.data['preferences'] ?? {});
       _cachePreferences(prefs);
       return prefs;
     } on SessionExpiredException {
@@ -44,7 +44,7 @@ class PreferencesService {
   Future<UserPreferences> updatePreferences(UserPreferences prefs) async {
     try {
       final res = await _dio.patch(
-        '/user-preferences/me',
+        '/auth/me/preferences',
         data: prefs.toJson(),
       );
       final updated = UserPreferences.fromJson(res.data);
@@ -60,7 +60,7 @@ class PreferencesService {
     Map<String, dynamic> updates,
   ) async {
     try {
-      final res = await _dio.patch('/user-preferences/me', data: updates);
+      final res = await _dio.patch('/auth/me/preferences', data: updates);
       final updated = UserPreferences.fromJson(res.data);
       _cachePreferences(updated);
       return updated;

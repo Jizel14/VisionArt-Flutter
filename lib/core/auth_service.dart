@@ -195,8 +195,8 @@ class AuthService {
     final token = await getToken;
     if (token == null) throw ApiException(401, 'Not logged in');
 
-    final response = await ApiClient.instance.get('/user-preferences/me');
-    final data = Map<String, dynamic>.from(response.data ?? {});
+    final response = await ApiClient.instance.get('/auth/me');
+    final data = Map<String, dynamic>.from(response.data['preferences'] ?? {});
     return _mapBackendToOnboardingPrefs(data);
   }
 
@@ -204,8 +204,8 @@ class AuthService {
     final token = await getToken;
     if (token == null) throw ApiException(401, 'Not logged in');
 
-    final response = await ApiClient.instance.get('/user-preferences/me');
-    final data = Map<String, dynamic>.from(response.data ?? {});
+    final response = await ApiClient.instance.get('/auth/me');
+    final data = Map<String, dynamic>.from(response.data['preferences'] ?? {});
 
     final favoriteStyles = List<String>.from(
       data['favoriteStyles'] as List? ?? const [],
@@ -239,7 +239,7 @@ class AuthService {
     };
 
     final response = await ApiClient.instance.patch(
-      '/user-preferences/me',
+      '/auth/me/preferences',
       data: body,
     );
 

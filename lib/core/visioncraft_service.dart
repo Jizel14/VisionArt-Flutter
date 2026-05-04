@@ -1,70 +1,105 @@
+import 'dart:convert';
 import 'dart:typed_data';
+import 'package:dio/dio.dart';
+import 'api_client.dart';
 
-import 'package:flutter_vision_craft/flutter_vision_craft.dart';
-
-import 'app_config.dart';
-
-/// Wrapper around [VisionCraft] for AI image generation in VisionArt.
-///
-/// Uses API key from [AppConfig] (set via .env file or --dart-define=VISIONCRAFT_API_KEY).
-/// Get your key from the VisionCraft Telegram bot: https://t.me/Metimol
+/// AI Image Generation Service — forwards requests to the NestJS backend
+/// which calls the Google Gemini / Imagen API.
+/// No client-side API key required.
 class VisionCraftService {
-  VisionCraftService({String? apiKey, String? baseUrl})
-    : _apiKey = apiKey ?? AppConfig.visionCraftApiKey,
-      _baseUrl = baseUrl ?? AppConfig.visionCraftBaseUrl {
-    if (_apiKey.isNotEmpty) {
-      _client = VisionCraft(apiKey: _apiKey, baseUrl: _baseUrl);
-    }
-  }
+  VisionCraftService();
 
-  final String _apiKey;
-  final String _baseUrl;
-  VisionCraft? _client;
+  /// Always true — generation is handled server-side.
+  bool get isConfigured => true;
 
-  bool get isConfigured => _apiKey.isNotEmpty && _client != null;
-
-  /// Generate an image from a text prompt.
-  /// Returns image bytes on success, or null if key is missing / request fails.
-  Future<Uint8List?> generateImage({
+  /// Generate an image via the backend's Gemini integration.
+  /// Returns raw image bytes (JPEG) on success, or null on failure.
+  Future<Map<String, dynamic>?> generateImage({
     required String prompt,
-    AIStyles aiStyle = AIStyles.abstract,
+    String styleName = 'anime',
     String? negativePrompt,
-    bool watermark = false,
-    bool nsfwFilter = true,
-    AIModels? model,
-    Samplers? sampler,
-    int? steps,
-    int? cfgScale,
+    String aspectRatio = 'square',
+    int quality = 3,
+    bool generateSimilar = false,
   }) async {
-    if (!isConfigured) return null;
     try {
-      final result = await _client!.generateImage(
-        prompt: prompt,
-        aiStyle: aiStyle,
-        negativePrompt: negativePrompt,
-        watermark: watermark,
-        nsfw_filter: nsfwFilter,
-        model: model,
-        sampler: sampler,
-        steps: steps,
-        cfgScale: cfgScale,
+      final response = await ApiClient.instance.post(
+        '/social/artworks/generate',
+        data: {
+          'prompt': prompt,
+          'negativePrompt': negativePrompt,
+          'style': styleName,
+          'aspectRatio': aspectRatio,
+          'quality': quality,
+          'generateSimilar': generateSimilar,
+        },
       );
-      return result;
-    } on Object {
+
+      final data = response.data;
+      if (data != null && data['success'] == true && data['imageB64'] != null) {
+        return {
+          'imageBytes': base64Decode(data['imageB64'] as String),
+          'similarArtworks': data['similarArtworks'] ?? [],
+          'artworkId': data['artworkId'],
+        };
+      }
+      return null;
+    } catch (e) {
+      if (e is DioException && e.response?.data != null) {
+        final backendError = e.response!.data['message'];
+        if (backendError != null) {
+          throw Exception(backendError);
+        }
+      }
       rethrow;
     }
   }
 
-  /// Fetch image bytes from a URL (e.g. from text2gif).
-  Future<Uint8List?> fetchImage(String imageUrl) async {
-    if (!isConfigured) return null;
+  /// Generate a video from an existing artwork (img+prompt to video)
+  Future<String?> generateVideo(String artworkId, {String? prompt}) async {
     try {
-      return await _client!.fetchImage(imageUrl);
-    } on Object {
+      final response = await ApiClient.instance.post(
+        '/social/artworks/$artworkId/generate-video',
+        data: prompt != null ? {'prompt': prompt} : {},
+      );
+      final data = response.data;
+      if (data != null && data['success'] == true) {
+        return data['videoUrl'] as String;
+      }
       return null;
+    } catch (e) {
+      if (e is DioException && e.response?.data != null) {
+        final backendError = e.response!.data['message'];
+        if (backendError != null) {
+          throw Exception(backendError);
+        }
+      }
+      rethrow;
     }
   }
 
-  /// All available styles for the Create UI.
-  static List<AIStyles> get availableStyles => AIStyles.values;
+  /// Analyze a drawing (Base64) via Gemini Vision backend and retrieve a prompt suggestion.
+  Future<String?> analyzeDrawing(String base64Image) async {
+    try {
+      final response = await ApiClient.instance.post(
+        '/social/artworks/analyze-drawing',
+        data: {
+          'imageB64': base64Image,
+        },
+      );
+      final data = response.data;
+      if (data != null && data['success'] == true) {
+        return data['prompt'] as String;
+      }
+      return null;
+    } catch (e) {
+      if (e is DioException && e.response?.data != null) {
+        final backendError = e.response!.data['message'];
+        if (backendError != null) {
+          throw Exception(backendError);
+        }
+      }
+      rethrow;
+    }
+  }
 }

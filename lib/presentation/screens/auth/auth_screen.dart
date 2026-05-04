@@ -1,14 +1,14 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../theme/app_colors.dart';
-import '../../theme/theme_extensions.dart';
-import '../splash/widgets/smoke_background.dart';
-import '../preferences/preferences_onboarding_screen.dart';
-import '../../widgets/custom_painters/smoke_painter.dart';
-import '../../../core/api_client.dart';
-import '../../../core/auth_service.dart';
-import '../../../core/app_config.dart';
+import 'package:visionart_mobile/presentation/theme/app_colors.dart';
+import 'package:visionart_mobile/presentation/theme/theme_extensions.dart';
+import 'package:visionart_mobile/presentation/screens/splash/widgets/app_background_wrapper.dart';
+import 'package:visionart_mobile/presentation/screens/preferences/preferences_onboarding_screen.dart';
+import 'package:visionart_mobile/presentation/widgets/custom_painters/smoke_painter.dart';
+import 'package:visionart_mobile/core/api_client.dart';
+import 'package:visionart_mobile/core/auth_service.dart';
+import 'package:visionart_mobile/core/app_config.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 /// User-friendly message for Google Sign-In errors (e.g. ApiException 10 = developer config).
@@ -67,7 +67,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      body: SmokeBackground(
+      body: AppBackgroundWrapper(
         child: SafeArea(
           child: Column(
             children: [
@@ -116,7 +116,7 @@ class _AuthScreenState extends State<AuthScreen> with TickerProviderStateMixin {
                     filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                     child: Container(
                       decoration: BoxDecoration(
-                        color: context.cardBackgroundColor,
+                        color: AppThemeColors.cardBackgroundColor(context),
                         border: Border(
                           top: BorderSide(
                             color: AppColors.primaryBlue.withOpacity(0.3),
@@ -236,7 +236,23 @@ class _LoginCardState extends State<_LoginCard> {
       );
       if (mounted) {
         setState(() => _loading = false);
-        widget.onSuccess();
+        final shouldOnboard = await widget.authService.needsPreferencesOnboarding();
+        if (!mounted) return;
+        if (shouldOnboard) {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => PreferencesOnboardingScreen(
+                authService: widget.authService,
+                onComplete: () {
+                  Navigator.of(context).pop();
+                  widget.onSuccess();
+                },
+              ),
+            ),
+          );
+        } else {
+          widget.onSuccess();
+        }
       }
     } on ApiException catch (e) {
       if (mounted) {
@@ -305,7 +321,10 @@ class _LoginCardState extends State<_LoginCard> {
             MaterialPageRoute(
               builder: (_) => PreferencesOnboardingScreen(
                 authService: widget.authService,
-                onComplete: widget.onSuccess,
+                onComplete: () {
+                  Navigator.of(context).pop();
+                  widget.onSuccess();
+                },
               ),
             ),
           );
@@ -739,7 +758,10 @@ class _SignUpCardState extends State<_SignUpCard> {
         MaterialPageRoute(
           builder: (_) => PreferencesOnboardingScreen(
             authService: widget.authService,
-            onComplete: widget.onSuccess,
+            onComplete: () {
+              Navigator.of(context).pop();
+              widget.onSuccess();
+            },
           ),
         ),
       );

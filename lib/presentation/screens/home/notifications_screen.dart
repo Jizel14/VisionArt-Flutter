@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/services/notifications_service.dart';
 import '../../theme/theme_extensions.dart';
-import '../splash/widgets/smoke_background.dart';
+import 'package:visionart_mobile/presentation/screens/splash/widgets/app_background_wrapper.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -107,8 +107,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final textPrimary = context.textPrimaryColor;
-    final textSecondary = context.textSecondaryColor;
+    final textPrimary = AppThemeColors.textPrimaryColor(context);
+    final textSecondary = AppThemeColors.textSecondaryColor(context);
     final unreadCount = _items.where((item) => !item.isRead).length;
 
     return Scaffold(
@@ -119,7 +119,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         backgroundColor: Colors.transparent,
         title: const Text('Notifications'),
       ),
-      body: SmokeBackground(
+      body: AppBackgroundWrapper(
         child: Padding(
           padding: EdgeInsets.only(
             top: kToolbarHeight + MediaQuery.of(context).padding.top,
@@ -132,10 +132,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: context.cardBackgroundColor,
+                    color: AppThemeColors.cardBackgroundColor(context),
                     borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                      color: context.borderColor.withOpacity(0.45),
+                      color: AppThemeColors.borderColor(context).withOpacity(0.45),
                     ),
                   ),
                   child: Row(
@@ -212,11 +212,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                               child: Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: context.cardBackgroundColor,
+                                  color: AppThemeColors.cardBackgroundColor(context),
                                   borderRadius: BorderRadius.circular(14),
                                   border: Border.all(
                                     color: item.isRead
-                                        ? context.borderColor.withOpacity(0.3)
+                                        ? AppThemeColors.borderColor(context).withOpacity(0.3)
                                         : Theme.of(context).colorScheme.primary
                                               .withOpacity(0.6),
                                   ),

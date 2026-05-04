@@ -33,6 +33,7 @@ class ArtworkModel {
   final bool isNSFW;
   final RemixData? remixedFrom;
   final DateTime createdAt;
+  final String? videoUrl;
 
   const ArtworkModel({
     required this.id,
@@ -51,6 +52,7 @@ class ArtworkModel {
     required this.isNSFW,
     this.remixedFrom,
     required this.createdAt,
+    this.videoUrl,
   });
 
   factory ArtworkModel.fromJson(Map<String, dynamic> json) =>
@@ -75,6 +77,7 @@ class ArtworkModel {
     bool? isNSFW,
     RemixData? remixedFrom,
     DateTime? createdAt,
+    String? videoUrl,
   }) {
     return ArtworkModel(
       id: id ?? this.id,
@@ -93,6 +96,7 @@ class ArtworkModel {
       isNSFW: isNSFW ?? this.isNSFW,
       remixedFrom: remixedFrom ?? this.remixedFrom,
       createdAt: createdAt ?? this.createdAt,
+      videoUrl: videoUrl ?? this.videoUrl,
     );
   }
 }
