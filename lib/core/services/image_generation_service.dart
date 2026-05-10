@@ -93,4 +93,29 @@ class ImageGenerationService {
       throw ApiException(code, e.message ?? 'Sketch analysis failed');
     }
   }
+
+  /// Generate a video from an existing artwork (img+prompt to video)
+  Future<String?> generateVideo(String artworkId, {String? prompt}) async {
+    try {
+      final response = await ApiClient.instance.post<Map<String, dynamic>>(
+        '/social/artworks/$artworkId/generate-video',
+        data: prompt != null ? {'prompt': prompt} : {},
+        options: Options(
+            receiveTimeout:
+                const Duration(seconds: 300)), // 5 min timeout for video
+      );
+      final data = response.data;
+      if (data != null && data['success'] == true) {
+        return data['videoUrl'] as String;
+      }
+      return null;
+    } on DioException catch (e) {
+      final code = e.response?.statusCode ?? 500;
+      final body = e.response?.data;
+      final msg = (body is Map && body['message'] is String)
+          ? body['message'] as String
+          : (e.message ?? 'Video generation failed');
+      throw ApiException(code, msg);
+    }
+  }
 }

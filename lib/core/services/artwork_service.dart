@@ -79,11 +79,20 @@ class ArtworkService {
     required String userId,
     int page = 1,
     int limit = 20,
+    String? search,
+    String? filter,
   }) async {
     try {
+      final queryParams = <String, dynamic>{'page': page, 'limit': limit};
+      if (search != null && search.isNotEmpty) {
+        queryParams['search'] = search;
+      }
+      if (filter != null && filter.isNotEmpty) {
+        queryParams['filter'] = filter;
+      }
       final response = await _dio.get(
         '/social/artworks/user/$userId',
-        queryParameters: {'page': page, 'limit': limit},
+        queryParameters: queryParams,
       );
       return PaginatedArtworks.fromJson(response.data);
     } catch (e) {
@@ -327,6 +336,55 @@ class ArtworkService {
     if (value is String) return int.tryParse(value) ?? 0;
     return 0;
   }
+
+  /// Get similar artworks for a given artwork (Pinterest-style discovery).
+  /// The backend first searches the DB; if fewer than [limit] are found it
+  /// AI-generates the remainder so the caller always gets at least [limit] items.
+  Future<List<ArtworkModel>> getSimilarArtworks(
+    String artworkId, {
+    int limit = 3,
+    bool generate = true,
+  }) async {
+    try {
+      final response = await _dio.get(
+        '/social/artworks/$artworkId/similar',
+        queryParameters: {
+          'limit': limit,
+          'generate': generate.toString(),
+        },
+      );
+      final payload = response.data as Map<String, dynamic>;
+      final list = payload['data'] as List<dynamic>? ?? [];
+      return list
+          .map((e) => ArtworkModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  /// Create a new artwork (used after generating an image to save it)
+  Future<ArtworkModel> createArtwork({
+    required String title,
+    required String description,
+    required String imageUrl,
+    String? thumbnailUrl,
+    Map<String, dynamic>? prompt,
+    bool isPublic = true,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/social/artworks',
+      data: {
+        'title': title,
+        'description': description,
+        'imageUrl': imageUrl,
+        if (thumbnailUrl != null) 'thumbnailUrl': thumbnailUrl,
+        if (prompt != null) 'prompt': prompt,
+        'isPublic': isPublic,
+      },
+    );
+    return ArtworkModel.fromJson(response.data!);
+  }
 }
 
 class CollectionSummary {
@@ -381,8 +439,7 @@ class ArtworkCommentItem {
       userName: (user['name'] ?? 'Unknown').toString(),
       userAvatarUrl: user['avatarUrl']?.toString(),
       content: (json['content'] ?? '').toString(),
-      createdAt:
-          DateTime.tryParse((json['createdAt'] ?? '').toString()) ??
+      createdAt: DateTime.tryParse((json['createdAt'] ?? '').toString()) ??
           DateTime.now(),
       parentCommentId: json['parentCommentId']?.toString(),
       isEdited: json['isEdited'] as bool? ?? false,

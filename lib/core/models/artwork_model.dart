@@ -32,6 +32,7 @@ class ArtworkModel {
   final bool isFollowedByMe;
   final bool isPublic;
   final bool isNSFW;
+  final String? videoUrl;
   final RemixData? remixedFrom;
   final DateTime createdAt;
 
@@ -51,6 +52,7 @@ class ArtworkModel {
     this.isFollowedByMe = false,
     required this.isPublic,
     required this.isNSFW,
+    this.videoUrl,
     this.remixedFrom,
     required this.createdAt,
   });
@@ -76,6 +78,7 @@ class ArtworkModel {
     bool? isFollowedByMe,
     bool? isPublic,
     bool? isNSFW,
+    String? videoUrl,
     RemixData? remixedFrom,
     DateTime? createdAt,
   }) {
@@ -95,6 +98,7 @@ class ArtworkModel {
       isFollowedByMe: isFollowedByMe ?? this.isFollowedByMe,
       isPublic: isPublic ?? this.isPublic,
       isNSFW: isNSFW ?? this.isNSFW,
+      videoUrl: videoUrl ?? this.videoUrl,
       remixedFrom: remixedFrom ?? this.remixedFrom,
       createdAt: createdAt ?? this.createdAt,
     );
